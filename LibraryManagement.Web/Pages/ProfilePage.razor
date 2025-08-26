@@ -25,39 +25,12 @@
         <div class="row">
             <!-- Left Column: User & Borrowing Info -->
             <div class="col-lg-5 mb-4">
-                <!-- Profile Picture & Basic Info Card -->
+                <!-- Basic Info Card (removed picture upload) -->
                 <div class="card shadow-sm mb-4">
                     <div class="card-body text-center">
-                        <img src="@(previewImageUrl ?? (userProfile.ProfilePictureUrl != null ? Http.BaseAddress + userProfile.ProfilePictureUrl : "images/placeholder-avatar.png"))"
-                             class="rounded-circle mb-3 profile-picture" alt="Avatar"
-                             onerror="this.onerror=null; this.src='images/placeholder-avatar.jpeg';" />
-
                         <h4 class="card-title">@userProfile.Username</h4>
                         <p class="text-muted">@userProfile.Role</p>
                         <p>@userProfile.Email</p>
-
-                        <hr />
-
-                        <EditForm Model="@uploadModel" OnValidSubmit="HandlePictureUpload">
-                            <DataAnnotationsValidator />
-                            <div class="mb-3">
-                                <label for="file-upload" class="form-label">Change Profile Picture</label>
-                                <InputFile OnChange="HandleFileSelected" id="file-upload" class="form-control" />
-                                <ValidationMessage For="@(() => uploadModel.File)" />
-                            </div>
-
-                            <button type="submit" class="btn btn-primary" disabled="@(isUploading || uploadModel.File == null)">
-                                @if (isUploading)
-                                {
-                                    <span class="spinner-border spinner-border-sm"></span>
-                                    <span> Saving...</span>
-         }
-                                else
-                                {
-                                    <span>Save Picture</span>
-                                }
-                            </button>
-                        </EditForm>
                     </div>
                 </div>
 
@@ -108,7 +81,7 @@
                                 {
                                     <span class="spinner-border spinner-border-sm"></span>
                                     <span> Updating...</span>
-         }
+                                }
                                 else
                                 {
                                     <span>Update Password</span>
@@ -131,14 +104,10 @@ else
     [CascadingParameter]
     private Task<AuthenticationState> authenticationStateTask { get; set; }
     private bool isAuthorized = false;
-    private bool isUploading = false;
     private bool isLoadingPasswordChange = false;
 
     private ChangePasswordModel changePasswordModel = new();
     private ProfileDto? userProfile;
-
-    private UploadModel uploadModel = new();
-    private string? previewImageUrl;
 
     protected override async Task OnInitializedAsync()
     {
@@ -156,63 +125,8 @@ else
         try
         {
             userProfile = await Http.GetFromJsonAsync<ProfileDto>("api/auth/profile");
-            previewImageUrl = null;
         }
         catch { ToastService.ShowError("Could not load your profile data."); }
-    }
-
-    private async Task HandleFileSelected(InputFileChangeEventArgs e)
-    {
-        var file = e.File;
-        if (file == null) return;
-
-        if (file.ContentType != "image/jpeg" && file.ContentType != "image/png")
-        {
-            ToastService.ShowError("Please select a valid image file (JPG or PNG).");
-            return;
-        }
-
-        uploadModel.File = file;
-
-        var buffer = new byte[file.Size];
-        await file.OpenReadStream(maxAllowedSize: 5 * 1024 * 1024).ReadAsync(buffer); // 5MB limit
-        var imageDataUrl = $"data:{file.ContentType};base64,{Convert.ToBase64String(buffer)}";
-        previewImageUrl = imageDataUrl;
-    }
-
-    private async Task HandlePictureUpload()
-    {
-        if (uploadModel.File == null)
-        {
-            ToastService.ShowError("Please select an image file first.");
-            return;
-        }
-
-        isUploading = true;
-        using var content = new MultipartFormDataContent();
-        using var fileStream = uploadModel.File.OpenReadStream(maxAllowedSize: 5 * 1024 * 1024);
-        var streamContent = new StreamContent(fileStream);
-        streamContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(uploadModel.File.ContentType);
-        content.Add(content: streamContent, name: "file", fileName: uploadModel.File.Name);
-
-        try
-        {
-            var response = await Http.PostAsync("api/profile/upload-picture", content);
-            if (response.IsSuccessStatusCode)
-            {
-                ToastService.ShowSuccess("Profile picture updated successfully!");
-                await LoadUserProfile();
-            }
-            else
-            {
-                var error = await response.Content.ReadAsStringAsync();
-                ToastService.ShowError($"Failed to upload picture: {error}");
-            }
-        }
-        finally
-        {
-            isUploading = false;
-        }
     }
 
     private async Task HandlePasswordChange()
@@ -237,12 +151,6 @@ else
             }
         }
         isLoadingPasswordChange = false;
-    }
-
-    public class UploadModel
-    {
-        [Required]
-        public IBrowserFile? File { get; set; }
     }
 
     private class ErrorResponse
