@@ -1,0 +1,94 @@
+﻿@using LibraryManagement.Web.Services
+@using LibraryManagement.Web.Models
+@inject NotificationStateService NotificationState
+@inject NavigationManager NavigationManager
+@implements IDisposable
+
+<div class="nav-item dropdown notification-bell">
+    <a class="nav-link" href="#" @onclick="ToggleDropdown" @onclick:preventDefault="true" role="button">
+        <i class="bi bi-bell-fill" style="color: yellow !important; font-size: 24px !important;"></i>
+        @if (NotificationState.UnreadCount > 0)
+        {
+            <span class="badge bg-danger notification-badge">@NotificationState.UnreadCount</span>
+        }
+    </a>
+
+    <div class="dropdown-menu dropdown-menu-end @(isDropdownVisible ? "show" : "")">
+        <div class="dropdown-header d-flex justify-content-between align-items-center">
+            <h6>Notifications</h6>
+            @if (NotificationState.UnreadCount > 0)
+            {
+                <a href="#" @onclick="MarkAllAsRead" @onclick:preventDefault="true">Mark all as read</a>
+            }
+        </div>
+
+        <div class="notification-list">
+            @if (NotificationState.Notifications.Any())
+            {
+                @foreach (var notification in NotificationState.Notifications)
+                {
+                    <a class="dropdown-item notification-item @(notification.IsRead ? "" : "unread")"
+                       href="@notification.Url" @onclick="() => HandleNotificationClick(notification)">
+                        <div class="fw-bold">@notification.Message</div>
+                        <div class="small text-muted">@TimeAgo(notification.DateCreated)</div>
+                    </a>
+                }
+            }
+            else
+            {
+                <div class="dropdown-item text-center text-muted">No notifications yet.</div>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    private bool isDropdownVisible = false;
+
+    protected override void OnInitialized()
+    {
+        // Subscribe to the OnChange event from the state service.
+        // This is how the component knows to re-render when the state changes.
+        NotificationState.OnChange += StateHasChanged;
+    }
+
+    private void ToggleDropdown()
+    {
+        isDropdownVisible = !isDropdownVisible;
+    }
+
+    private async Task MarkAllAsRead()
+    {
+        await NotificationState.MarkAllAsReadAsync();
+        ToggleDropdown(); // Close dropdown after action
+    }
+
+    private void HandleNotificationClick(NotificationDto notification)
+    {
+        // Even if the user doesn't have unread items, clicking should close the dropdown
+        // and navigate if a URL is present.
+        isDropdownVisible = false;
+        if (!string.IsNullOrWhiteSpace(notification.Url))
+        {
+            NavigationManager.NavigateTo(notification.Url);
+        }
+    }
+
+    // A helper function to display "5 minutes ago", "2 hours ago", etc.
+    private string TimeAgo(DateTime dt)
+    {
+        TimeSpan span = DateTime.UtcNow - dt;
+        if (span.Days > 365) return $"{span.Days / 365} year(s) ago";
+        if (span.Days > 30) return $"{span.Days / 30} month(s) ago";
+        if (span.Days > 0) return $"{span.Days} day(s) ago";
+        if (span.Hours > 0) return $"{span.Hours} hour(s) ago";
+        if (span.Minutes > 0) return $"{span.Minutes} minute(s) ago";
+        return "just now";
+    }
+
+    // This is crucial for cleaning up the event subscription to prevent memory leaks.
+    public void Dispose()
+    {
+        NotificationState.OnChange -= StateHasChanged;
+    }
+}

@@ -1,0 +1,295 @@
+﻿
+@using LibraryManagement.Web.Models
+@using Microsoft.AspNetCore.Components.Authorization
+@using LibraryManagement.Web.Services
+@inject HttpClient Http
+@inject WishlistStateService WishlistState
+@inject Blazored.Toast.Services.IToastService ToastService
+
+@if (IsVisible && Book != null)
+{
+    <div class="modal fade show" tabindex="-1" style="display: block;" role="dialog">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">@Book.Title</h5>
+                    <button type="button" class="btn-close" @onclick="CloseModal"></button>
+                </div>
+                <div class="modal-body">
+                    <!-- Nav tabs for Details and Reviews -->
+                    <ul class="nav nav-tabs">
+                        <li class="nav-item">
+                            <button class="nav-link @(activeTab == "details" ? "active" : "")" @onclick='() => SetActiveTab("details")'>Details</button>
+                        </li>
+                        <li class="nav-item">
+                            <button class="nav-link @(activeTab == "reviews" ? "active" : "")" @onclick='() => SetActiveTab("reviews")'>Reviews</button>
+                        </li>
+                    </ul>
+
+                    <!-- Tab content -->
+                    <div class="tab-content pt-3">
+                        <!-- Details Tab Pane -->
+                        <div class="tab-pane fade @(activeTab == "details" ? "show active" : "")">
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <img src="@(string.IsNullOrWhiteSpace(Book.CoverImageUrl) ? "images/placeholder.png" : Book.CoverImageUrl)"
+                                         class="img-fluid rounded" alt="@Book.Title"
+                                         onerror="this.onerror=null; this.src='images/placeholder.png';" />
+                                </div>
+                                <div class="col-md-8">
+                                    <h6>by @Book.Author</h6>
+                                    <p><strong>Published:</strong> @Book.PublishedDate.ToShortDateString()</p>
+                                    <p><strong>ISBN:</strong> @(Book.ISBN ?? "N/A")</p>
+                                    <hr />
+                                    <p>@Book.Description</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Reviews Tab Pane (FULLY RESTORED) -->
+                        <div class="tab-pane fade @(activeTab == "reviews" ? "show active" : "")">
+                            @if (bookReviews == null)
+                            {
+                                <p><em>Loading reviews...</em></p>
+                            }
+                            else if (!bookReviews.Reviews.Any())
+                            {
+                                <div class="alert alert-info">Be the first to write a review for this book!</div>
+                            }
+                            else
+                            {
+                                <!-- Average Rating Display -->
+                                <div class="mb-3">
+                                    <h5>
+                                        Average Rating:
+                                        <span class="star-rating ms-2">
+                                            @for (int i = 1; i <= 5; i++)
+                                            {
+                                                <span class="@(i <= Math.Round(bookReviews.AverageRating) ? "filled" : "")">&#9733;</span>
+                                            }
+                                        </span>
+                                        <span class="text-muted ms-2">(@bookReviews.AverageRating.ToString("0.0"))</span>
+                                    </h5>
+                                </div>
+                                <hr />
+                                <!-- List of Reviews -->
+                                @foreach (var review in bookReviews.Reviews)
+                                {
+                                    <div class="mb-3 border-bottom pb-2">
+                                        <div class="d-flex justify-content-between">
+                                            <strong>@review.UserName</strong>
+                                            <span class="text-muted small">@review.DatePosted.ToShortDateString()</span>
+                                        </div>
+                                        <div class="star-rating small">
+                                            @for (int i = 1; i <= 5; i++)
+                                            {
+                                                <span class="@(i <= review.Rating ? "filled" : "")">&#9733;</span>
+                                            }
+                                        </div>
+                                        <p class="mt-1 mb-0">@review.Comment</p>
+                                    </div>
+                                }
+                            }
+                        </div>
+                    </div>
+
+                    <!-- AI RECOMMENDATIONS SECTION -->
+                    <hr class="my-4" />
+                    <h5><i class="bi bi-robot"></i> You Might Also Like...</h5>
+                    @if (isLoadingRecommendations)
+                    {
+                        <p><em>Generating AI recommendations...</em></p>
+                    }
+                    else if (recommendedBooks != null && recommendedBooks.Any())
+                    {
+                        <div class="row row-cols-1 row-cols-md-3 g-3">
+                            @foreach (var recommendation in recommendedBooks)
+                            {
+                                <div class="col">
+                                    <div class="card h-100 shadow-sm mini-book-card" @onclick="() => OnRecommendationClicked.InvokeAsync(recommendation)">
+                                        <img src="@(string.IsNullOrWhiteSpace(recommendation.CoverImageUrl) ? "images/placeholder.png" : recommendation.CoverImageUrl)"
+                                             class="card-img-top" alt="@recommendation.Title"
+                                             onerror="this.onerror=null; this.src='images/placeholder.png';" />
+                                        <div class="card-body p-2">
+                                            <h6 class="card-title small">@recommendation.Title</h6>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <p class="text-muted">No specific recommendations found at this time.</p>
+                    }
+                </div>
+                <div class="modal-footer justify-content-between">
+                    <span class="badge @(Book.Quantity > 0 ? "bg-success" : "bg-danger")">
+                        @(Book.Quantity > 0 ? $"Available Copies: {Book.Quantity}" : "Currently Out of Stock")
+                    </span>
+                    <div class="d-flex">
+                        <!-- WISHLIST BUTTON -->
+                        <AuthorizeView>
+                            <Authorized>
+                                @if (WishlistState.IsOnWishlist(Book.Id))
+                                {
+                                    <button class="btn btn-outline-danger me-2" @onclick="HandleRemoveFromWishlist">
+                                        <i class="bi bi-bookmark-x-fill"></i> Remove from List
+                                    </button>
+                                }
+                                else
+                                {
+                                    <button class="btn btn-outline-success me-2" @onclick="HandleAddToWishlist">
+                                        <i class="bi bi-bookmark-plus-fill"></i> Add to Reading List
+                                    </button>
+                                }
+                            </Authorized>
+                        </AuthorizeView>
+                        <!-- REQUEST TO BORROW BUTTON -->
+                        <AuthorizeView Roles="Student, Teacher">
+                            <Authorized>
+                                <button class="btn btn-primary"
+                                        disabled="@(Book.Quantity == 0)"
+                                        @onclick="OnRequestBookClicked">
+                                    <i class="bi bi-hand-thumbs-up-fill"></i> Request to Borrow
+                                </button>
+                            </Authorized>
+                            <NotAuthorized>
+                                <button class="btn btn-secondary" disabled>
+                                    Login as Student/Teacher to Borrow
+                                </button>
+                            </NotAuthorized>
+                        </AuthorizeView>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal-backdrop fade show"></div>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public Book? Book { get; set; }
+
+    [Parameter]
+    public bool IsVisible { get; set; }
+
+    [Parameter, EditorRequired]
+    public EventCallback OnClose { get; set; }
+
+    [Parameter, EditorRequired]
+    public EventCallback<int> OnRequestBook { get; set; }
+
+    [Parameter]
+    public EventCallback<Book> OnRecommendationClicked { get; set; }
+
+    private string activeTab = "details";
+    private BookReviewsDto? bookReviews;
+    private List<Book>? recommendedBooks;
+    private bool isLoadingRecommendations = false;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (IsVisible && Book != null)
+        {
+            activeTab = "details";
+            bookReviews = null;
+            recommendedBooks = null;
+            await Task.WhenAll(
+                LoadReviews(),
+                LoadRecommendations()
+            );
+
+            // --- THIS IS THE FIRST FIX ---
+            // Force the component to re-render after all data has been fetched.
+            StateHasChanged();
+        }
+    }
+
+    private void SetActiveTab(string tabName)
+    {
+        activeTab = tabName;
+    }
+
+    private async Task LoadReviews()
+    {
+        if (Book == null) return;
+        try
+        {
+            bookReviews = await Http.GetFromJsonAsync<BookReviewsDto>($"api/reviews/{Book.Id}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading reviews: {ex.Message}");
+            bookReviews = new BookReviewsDto();
+        }
+    }
+
+    private async Task LoadRecommendations()
+    {
+        if (Book == null) return;
+        isLoadingRecommendations = true;
+        try
+        {
+            recommendedBooks = await Http.GetFromJsonAsync<List<Book>>($"api/recommendations/{Book.Id}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading recommendations: {ex.Message}");
+            recommendedBooks = new List<Book>();
+        }
+        finally
+        {
+            isLoadingRecommendations = false;
+            // --- THIS IS THE SECOND FIX ---
+            // This ensures the UI updates even if the API call was very fast.
+            StateHasChanged();
+        }
+    }
+
+    private async Task CloseModal()
+    {
+        await OnClose.InvokeAsync();
+    }
+
+    private async Task OnRequestBookClicked()
+    {
+        if (Book != null)
+        {
+            await OnRequestBook.InvokeAsync(Book.Id);
+            await CloseModal();
+        }
+    }
+
+    private async Task HandleAddToWishlist()
+    {
+        if (Book == null) return;
+        var response = await Http.PostAsync($"api/wishlist/{Book.Id}", null);
+        if (response.IsSuccessStatusCode)
+        {
+            WishlistState.AddBook(Book.Id);
+            ToastService.ShowSuccess("Book added to your reading list!");
+        }
+        else
+        {
+            ToastService.ShowError("Failed to add book to list.");
+        }
+    }
+
+    private async Task HandleRemoveFromWishlist()
+    {
+        if (Book == null) return;
+        var response = await Http.DeleteAsync($"api/wishlist/{Book.Id}");
+        if (response.IsSuccessStatusCode)
+        {
+            WishlistState.RemoveBook(Book.Id);
+            ToastService.ShowInfo("Book removed from your reading list.");
+        }
+        else
+        {
+            ToastService.ShowError("Failed to remove book from list.");
+        }
+    }
+}
+    

@@ -1,0 +1,99 @@
+﻿@page "/admin/users"
+@using LibraryManagement.Web.Models
+@inject HttpClient Http
+@inject IJSRuntime JSRuntime
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject Blazored.Toast.Services.IToastService ToastService
+
+<PageTitle>User Management</PageTitle>
+
+@if (isAuthorized)
+{
+    <h3><i class="bi bi-people-fill"></i> User Management</h3>
+    <p>View and remove registered users from the system.</p>
+    <hr />
+    @if (allUsers == null)
+    {
+        <p><em>Loading users...</em></p>
+        ;
+    }
+    else
+    {
+        <table class="table table-striped">
+            <thead class="table-dark">
+                <tr>
+                    <th>Username</th>
+                    <th>Email</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var user in FilteredUsers)
+                {
+                    <tr>
+                        <td>@user.UserName</td>
+                        <td>@user.Email</td>
+                        <td>
+                            <a href="@($"/admin/users/edit/{user.Id}")" class="btn btn-sm btn-primary">
+                                <i class="bi bi-pencil-square"></i> Edit Role
+                            </a>
+                            <button class="btn btn-sm btn-danger" @onclick="() => DeleteUser(user.Id, user.UserName)">
+                                <i class="bi bi-trash-fill"></i> Delete
+                            </button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+}
+else
+{
+    <p>You are not authorized to view this page.</p>
+}
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState> authenticationStateTask { get; set; }
+    private bool isAuthorized = false;
+    private string? currentUserName;
+    private List<User>? allUsers;
+    private List<User> FilteredUsers => allUsers?.Where(u => u.UserName != currentUserName).ToList() ?? new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await authenticationStateTask;
+        var user = authState.User;
+        if (user.Identity != null && user.Identity.IsAuthenticated && user.IsInRole("Librarian"))
+        {
+            isAuthorized = true;
+            currentUserName = user.Identity.Name;
+            await LoadUsers();
+        }
+    }
+
+    private async Task LoadUsers()
+    {
+        try
+        {
+            allUsers = await Http.GetFromJsonAsync<List<User>>("api/admin/users");
+        }
+        catch { ToastService.ShowError("Failed to load user list."); }
+    }
+
+    private async Task DeleteUser(string userId, string userName)
+    {
+        var confirmed = await JSRuntime.InvokeAsync<bool>("confirm", $"Are you sure you want to permanently delete the user '{userName}'?");
+        if (!confirmed) return;
+
+        var response = await Http.DeleteAsync($"api/admin/users/{userId}");
+        if (response.IsSuccessStatusCode)
+        {
+            ToastService.ShowSuccess("User deleted successfully.");
+            await LoadUsers(); // Refresh the list
+        }
+        else
+        {
+            ToastService.ShowError("Failed to delete user.");
+        }
+    }
+}

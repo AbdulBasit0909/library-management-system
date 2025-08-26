@@ -1,0 +1,68 @@
+﻿@page "/books/edit/{id:int}"
+@using LibraryManagement.Web.Models
+@using LibraryManagement.Web.Components
+@inject HttpClient Http
+@inject NavigationManager NavigationManager
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject Blazored.Toast.Services.IToastService ToastService
+
+@if (isAuthorized)
+{
+    <h3>Edit Book</h3>
+    <hr />
+    @if (book == null)
+    {
+        <p><em>Loading...</em></p>
+    }
+    else
+    {
+        <BookForm Book="@book" ButtonText="Update Book" OnValidSubmit="HandleSubmit" />
+    }
+}
+else
+{
+    <p>You are not authorized to view this page. You must be a Librarian.</p>
+}
+
+@code {
+    [CascadingParameter]
+    private Task<AuthenticationState> authenticationStateTask { get; set; }
+    private bool isAuthorized = false;
+
+    [Parameter]
+    public int Id { get; set; }
+    private Book? book;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await authenticationStateTask;
+        var user = authState.User;
+        if (user.Identity != null && user.Identity.IsAuthenticated && user.IsInRole("Librarian"))
+        {
+            isAuthorized = true;
+            try
+            {
+                book = await Http.GetFromJsonAsync<Book>($"api/Books/{Id}");
+            }
+            catch
+            {
+                ToastService.ShowError("Could not load book details.");
+            }
+        }
+    }
+
+    private async Task HandleSubmit()
+    {
+        if (book == null) return;
+        var response = await Http.PutAsJsonAsync($"api/Books/{book.Id}", book);
+        if (response.IsSuccessStatusCode)
+        {
+            ToastService.ShowSuccess("Book updated successfully!");
+            NavigationManager.NavigateTo("/books");
+        }
+        else
+        {
+            ToastService.ShowError("Failed to update book.");
+        }
+    }
+}

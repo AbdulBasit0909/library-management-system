@@ -1,0 +1,137 @@
+﻿@inherits LayoutComponentBase
+@inject NavigationManager NavigationManager
+@using LibraryManagement.Web.Services
+@inject NotificationService SignalRNotificationService
+@inject NotificationStateService PersistentNotificationService
+@implements IDisposable
+@using LibraryManagement.Web.Components
+@using LibraryManagement.Web.Components
+@using Microsoft.AspNetCore.Components.Authorization
+
+
+
+<div class="page">
+    @if (!HideSideNav)
+    {
+        <div class="sidebar">
+            <NavMenu />
+        </div>
+    }
+
+    <main>
+        @if (!HideTopBar)
+        {
+            <div class="top-row px-4">
+                <!-- Logic to show the bell is now controlled by a C# property -->
+                @if (ShowNotificationBell)
+                {
+                    <NotificationBell />
+                }
+                
+                <a href="https://docs.microsoft.com/aspnet/" target="_blank" class="ms-auto">About</a>
+            </div>
+        }
+
+        <article class="content px-4">
+            @Body
+        </article>
+    </main>
+</div>
+
+<BlazoredToasts />
+
+<!-- Logic to show the chatbot is now controlled by its own C# property -->
+@if (ShowChatbotWidget)
+{
+    <ChatbotWidget />
+}
+
+
+@code {
+    [CascadingParameter]
+    private Task<AuthenticationState> authenticationStateTask { get; set; }
+
+    private bool hasInitializedServices = false;
+    private AuthenticationState? latestAuthState;
+
+    protected override async Task OnInitializedAsync()
+    {
+        latestAuthState = await authenticationStateTask;
+        NavigationManager.LocationChanged += OnLocationChanged;
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        latestAuthState = await authenticationStateTask;
+        var user = latestAuthState.User;
+
+        if (user.Identity != null && user.Identity.IsAuthenticated == true && !hasInitializedServices)
+        {
+            hasInitializedServices = true;
+            await SignalRNotificationService.StartConnectionAsync();
+            await PersistentNotificationService.InitializeAsync();
+        }
+    }
+
+    // --- NEW, PRECISE VISIBILITY PROPERTIES ---
+
+    private bool ShowNotificationBell
+    {
+        get
+        {
+            // The bell should only be shown if the user is authenticated.
+            return latestAuthState?.User?.Identity?.IsAuthenticated ?? false;
+        }
+    }
+
+    private bool ShowChatbotWidget
+    {
+        get
+        {
+            // Condition 1: User must be authenticated.
+            if (latestAuthState?.User?.Identity?.IsAuthenticated != true)
+            {
+                return false;
+            }
+
+            // Condition 2: Check the current page URL.
+            var currentUri = NavigationManager.Uri.ToLower();
+            var baseUri = NavigationManager.BaseUri.ToLower();
+
+            // List of pages where the chatbot should be hidden.
+            if (currentUri == baseUri || 
+                currentUri.EndsWith("/login") || 
+                currentUri.EndsWith("/register") ||
+                currentUri.EndsWith("/profile")) // <-- Hide on profile page
+            {
+                return false;
+            }
+
+            // If none of the hide conditions are met, show the widget.
+            return true;
+        }
+    }
+
+    private bool HideTopBar => IsOnPublicPage();
+    private bool HideSideNav => IsOnPublicPage();
+    
+    private bool IsOnPublicPage()
+    {
+        var currentUri = NavigationManager.Uri.ToLower().TrimEnd('/');
+        var baseUri = NavigationManager.BaseUri.ToLower().TrimEnd('/');
+        return currentUri == baseUri ||
+               currentUri.EndsWith("/login") ||
+               currentUri.EndsWith("/register");
+    }
+
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
+    {
+        StateHasChanged();
+    }
+
+    public void Dispose()
+    {
+        NavigationManager.LocationChanged -= OnLocationChanged;
+        _ = SignalRNotificationService.DisposeAsync();
+    }
+}

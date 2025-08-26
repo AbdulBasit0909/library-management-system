@@ -1,0 +1,118 @@
+﻿@page "/admin/users/edit/{Id}"
+@using LibraryManagement.Web.Models
+@using System.Text.Json.Serialization
+@inject HttpClient Http
+@inject NavigationManager NavigationManager
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject Blazored.Toast.Services.IToastService ToastService
+
+<PageTitle>Edit User Role</PageTitle>
+
+@if (isAuthorized)
+{
+    <h3>Edit Role for User: <strong>@userModel?.UserName</strong></h3>
+    <hr />
+
+    @if (userModel == null)
+    {
+        <p><em>Loading user details...</em></p>
+    }
+    else
+    {
+        <div class="card shadow-sm" style="max-width: 500px;">
+            <div class="card-body">
+                <EditForm Model="@updateModel" OnValidSubmit="HandleUpdateRole">
+                    <DataAnnotationsValidator />
+                    <div class="mb-3">
+                        <label class="form-label">Current Role:</label>
+                        <input class="form-control" readonly value="@userModel.Role" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Change Role to:</label>
+                        <InputSelect class="form-select" @bind-Value="updateModel.NewRole">
+                            <option value="Student">Student</option>
+                            <option value="Teacher">Teacher</option>
+                            <option value="Librarian">Librarian</option>
+                        </InputSelect>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Update Role</button>
+                    <a href="/admin/users" class="btn btn-secondary">Cancel</a>
+                </EditForm>
+            </div>
+        </div>
+    }
+}
+else
+{
+    <p>You are not authorized to view this page.</p>
+}
+
+@code {
+    [CascadingParameter]
+    private Task<AuthenticationState> authenticationStateTask { get; set; }
+    private bool isAuthorized = false;
+
+    [Parameter]
+    public string Id { get; set; }
+
+    private UserWithRole? userModel;
+    private UpdateRoleModel updateModel = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await authenticationStateTask;
+        var user = authState.User;
+        if (user.Identity != null && user.Identity.IsAuthenticated && user.IsInRole("Librarian"))
+        {
+            isAuthorized = true;
+            await LoadUserDetails();
+        }
+    }
+
+    private async Task LoadUserDetails()
+    {
+        try
+        {
+            // Call our new, efficient endpoint to get a single user's details
+            userModel = await Http.GetFromJsonAsync<UserWithRole>($"api/admin/users/{Id}");
+            if (userModel != null)
+            {
+                // Set the dropdown to the user's current role
+                updateModel.NewRole = userModel.Role;
+            }
+        }
+        catch { ToastService.ShowError("Could not load user details."); }
+    }
+
+    private async Task HandleUpdateRole()
+    {
+        var response = await Http.PutAsJsonAsync($"api/admin/users/{Id}/role", updateModel);
+        if (response.IsSuccessStatusCode)
+        {
+            ToastService.ShowSuccess("User role updated successfully!");
+            NavigationManager.NavigateTo("/admin/users");
+        }
+        else
+        {
+            ToastService.ShowError("Failed to update user role.");
+        }
+    }
+
+    // A model to represent the full user data from our new API
+    public class UserWithRole
+    {
+        [JsonPropertyName("id")]
+        public string Id { get; set; }
+        [JsonPropertyName("userName")]
+        public string UserName { get; set; }
+        [JsonPropertyName("email")]
+        public string Email { get; set; }
+        [JsonPropertyName("role")]
+        public string Role { get; set; }
+    }
+
+    public class UpdateRoleModel
+    {
+        public string NewRole { get; set; } = "Student";
+    }
+}

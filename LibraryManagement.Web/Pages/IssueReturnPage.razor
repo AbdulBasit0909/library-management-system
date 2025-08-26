@@ -1,0 +1,306 @@
+﻿@page "/librarian/issue-return"
+@using LibraryManagement.Web.Models
+@inject HttpClient Http
+@inject IJSRuntime JSRuntime
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject Blazored.Toast.Services.IToastService ToastService
+
+<PageTitle>Issue & Return Books</PageTitle>
+
+@if (isAuthorized)
+{
+    <h3><i class="bi bi-arrow-left-right"></i> Issue & Return Books</h3>
+    <hr />
+
+    <div class="card shadow-sm mb-4">
+        <div class="card-header"><h4>Issue a New Book</h4></div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Search for a Book</label>
+                    <input @bind="bookSearchTerm" @bind:event="oninput" class="form-control" placeholder="Type title..." />
+
+                    @if (!string.IsNullOrWhiteSpace(bookSearchTerm) && SearchedBooks.Any())
+                    {
+                        <ul class="list-group mt-1" style="max-height: 200px; overflow-y: auto;">
+                            @foreach (var book in SearchedBooks)
+                            {
+                                <li class="list-group-item list-group-item-action" @onclick="() => SelectBook(book)">
+                                    @book.Title by @book.Author (Available: @book.Quantity)
+                                </li>
+                            }
+                        </ul>
+                    }
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Search for a User</label>
+                    <input @bind="userSearchTerm" @bind:event="oninput" class="form-control" placeholder="Type username..." />
+
+                    @if (!string.IsNullOrWhiteSpace(userSearchTerm) && SearchedUsers.Any())
+                    {
+                        <ul class="list-group mt-1" style="max-height: 200px; overflow-y: auto;">
+                            @foreach (var user in SearchedUsers)
+                            {
+                                <li class="list-group-item list-group-item-action" @onclick="() => SelectUser(user)">
+                                    @user.UserName (@user.Email)
+                                </li>
+                            }
+                        </ul>
+                    }
+                </div>
+            </div>
+            @if (selectedBook != null && selectedUser != null)
+            {
+                <div class="alert alert-info">Issuing <strong>"@selectedBook.Title"</strong> to <strong>@selectedUser.UserName</strong>.</div>
+                <button class="btn btn-primary" @onclick="IssueBook" disabled="@(selectedBook.Quantity <= 0)">Confirm & Issue Book</button>
+            }
+        </div>
+    </div>
+
+    <h4><i class="bi bi-clock-history"></i> Active Loans</h4>
+    @if (activeLoans == null)
+    {
+        <p><em>Loading active loans...</em></p>
+    }
+    else
+    {
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>Book Title</th>
+                    <th>Borrowed By</th>
+                    <th>Due Date</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var loan in activeLoans)
+                {
+                    var isOverdue = DateTime.UtcNow.Date > loan.DueDate.Date;
+
+                    <tr class="@(isOverdue ? "table-danger" : "")">
+                        <td>@loan.BookTitle</td>
+                        <td>@loan.UserName</td>
+                        <td>@loan.DueDate.ToShortDateString()</td>
+                        <td>
+                            @if (isOverdue)
+                            {
+                                var days = (int)(DateTime.UtcNow.Date - loan.DueDate.Date).TotalDays;
+                                <strong>OVERDUE (@((days * 0.25m).ToString("C")))</strong>
+                            }
+                            else
+                            {
+                                <span class="text-success">On Time</span>
+                            }
+                        </td>
+                        <td>
+                            <button class="btn btn-sm btn-success" @onclick="() => ReturnBook(loan.Id)">
+                                <i class="bi bi-check-lg"></i> Mark as Returned
+                            </button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+
+    <!-- --- NEW SECTION FOR MANAGING FINES --- -->
+    <h4 class="mt-5"><i class="bi bi-cash-coin"></i> Manage Outstanding Fines</h4>
+    <hr />
+    @if (outstandingFines == null)
+    {
+        <p><em>Loading outstanding fines...</em></p>
+    }
+    else if (!outstandingFines.Any())
+    {
+        <div class="alert alert-success" role="alert">
+            There are currently no outstanding fines to manage.
+        </div>
+    }
+    else
+    {
+        <table class="table table-striped table-bordered">
+            <thead class="table-info">
+                <tr>
+                    <th>Book Title</th>
+                    <th>Borrowed By</th>
+                    <th>Fine Amount</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var loan in outstandingFines)
+                {
+                    <tr>
+                        <td>@loan.BookTitle</td>
+                        <td>@loan.UserName</td>
+                        <td><strong>@loan.FineAmount.ToString("C")</strong></td>
+                        <td>
+                            <button class="btn btn-sm btn-success" @onclick="() => MarkFineAsPaid(loan.Id)">
+                                <i class="bi bi-check-circle-fill"></i> Mark as Paid
+                            </button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+}
+else
+{
+    <p>You are not authorized to view this page. You must be a Librarian.</p>
+}
+
+
+@code {
+    [CascadingParameter]
+    private Task<AuthenticationState> authenticationStateTask { get; set; }
+
+    private bool isAuthorized = false;
+    private bool isLoading = true;
+
+    private List<Book>? allBooks;
+    private List<User>? allUsers;
+    private List<LoanDto>? activeLoans;
+
+    // ADDED: This list will hold the fines data
+    private List<LoanDto>? outstandingFines;
+
+    private string bookSearchTerm = "";
+    private string userSearchTerm = "";
+    private Book? selectedBook;
+    private User? selectedUser;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await authenticationStateTask;
+        var user = authState.User;
+        if (user.Identity != null && user.Identity.IsAuthenticated && user.IsInRole("Librarian"))
+        {
+            isAuthorized = true;
+            await LoadInitialData();
+        }
+        isLoading = false;
+    }
+
+    // MODIFIED: This method now loads all data in parallel for better performance
+    private async Task LoadInitialData()
+    {
+        try
+        {
+            await Task.WhenAll(
+                LoadUsersAndBooks(),
+                LoadActiveLoans(),
+                LoadOutstandingFines()
+            );
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Failed to load initial page data: {ex.Message}");
+        }
+    }
+
+    private async Task LoadUsersAndBooks()
+    {
+        allUsers = await Http.GetFromJsonAsync<List<User>>("api/admin/users");
+        allBooks = await Http.GetFromJsonAsync<List<Book>>("api/books/all");
+    }
+
+    private async Task LoadActiveLoans()
+    {
+        activeLoans = await Http.GetFromJsonAsync<List<LoanDto>>("api/loans/all");
+    }
+
+    // ADDED: This method loads the outstanding fines
+    private async Task LoadOutstandingFines()
+    {
+        outstandingFines = await Http.GetFromJsonAsync<List<LoanDto>>("api/loans/outstanding-fines");
+    }
+
+    private List<Book> SearchedBooks => allBooks?.Where(b => b.Title.Contains(bookSearchTerm, StringComparison.OrdinalIgnoreCase)).Take(5).ToList() ?? new();
+    private List<User> SearchedUsers => allUsers?.Where(u => u.UserName.Contains(userSearchTerm, StringComparison.OrdinalIgnoreCase)).Take(5).ToList() ?? new();
+
+    private void SelectBook(Book book) { selectedBook = book; bookSearchTerm = book.Title; }
+    private void SelectUser(User user) { selectedUser = user; userSearchTerm = user.UserName; }
+
+    private async Task IssueBook()
+    {
+        isLoading = true;
+        if (selectedBook == null || selectedUser == null) return;
+        var issueRequest = new { BookId = selectedBook.Id, UserId = selectedUser.Id };
+        var response = await Http.PostAsJsonAsync("api/loans/issue", issueRequest);
+        if (response.IsSuccessStatusCode)
+        {
+            ToastService.ShowSuccess("Book issued successfully!");
+            await RefreshData();
+        }
+        else
+        {
+            ToastService.ShowError("Failed to issue book.");
+        }
+        isLoading = false;
+    }
+
+    private async Task ReturnBook(int loanId)
+    {
+        var response = await Http.PostAsync($"api/loans/return/{loanId}", null);
+        if (response.IsSuccessStatusCode)
+        {
+            var result = await response.Content.ReadFromJsonAsync<ReturnResponse>();
+            ToastService.ShowSuccess(result?.Message ?? "Book returned successfully!");
+            await RefreshData();
+        }
+        else
+        {
+            ToastService.ShowError("Failed to return book.");
+        }
+    }
+
+    // MODIFIED: This method now refreshes all data on the page
+    private async Task RefreshData()
+    {
+        selectedBook = null;
+        selectedUser = null;
+        bookSearchTerm = "";
+        userSearchTerm = "";
+        try
+        {
+            // When we return a book, it might generate a fine, so we reload everything.
+            await LoadInitialData();
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Failed to refresh page data: {ex.Message}");
+        }
+    }
+
+    // ADDED: This method handles the logic for paying a fine
+    private async Task MarkFineAsPaid(int loanId)
+    {
+        var confirmed = await JSRuntime.InvokeAsync<bool>("confirm", "Are you sure you want to mark this fine as paid? This action cannot be undone.");
+        if (confirmed)
+        {
+            var response = await Http.PostAsync($"api/loans/payfine/{loanId}", null);
+            if (response.IsSuccessStatusCode)
+            {
+                ToastService.ShowSuccess("Fine marked as paid successfully!");
+                // Just reload the fines list, no need to reload everything else.
+                await LoadOutstandingFines();
+                StateHasChanged();
+            }
+            else
+            {
+                // Try to read a specific error message from the API
+                var errorContent = await response.Content.ReadFromJsonAsync<ErrorResponse>();
+                ToastService.ShowError(errorContent?.Message ?? "Failed to mark fine as paid.");
+            }
+        }
+    }
+
+    private class ReturnResponse { public string Message { get; set; } }
+
+    // ADDED: A helper class to parse potential error messages from the API
+    private class ErrorResponse { public string Message { get; set; } }
+}

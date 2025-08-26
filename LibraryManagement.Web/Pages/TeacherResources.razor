@@ -1,0 +1,137 @@
+﻿@page "/teacher/resources"
+@using LibraryManagement.Web.Models
+@inject HttpClient Http
+@inject NavigationManager NavigationManager
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject Blazored.Toast.Services.IToastService ToastService
+@inject IJSRuntime JSRuntime
+
+<PageTitle>E-Resources</PageTitle>
+
+@if (isAuthorized)
+{
+    <h3><i class="bi bi-collection-fill"></i> Browse E-Resources</h3>
+    <p>Access the library's exclusive collection of digital journals, papers, and e-books.</p>
+    <hr />
+
+    <!-- Search Bar -->
+    <div class="mb-3" style="max-width: 500px;">
+        <div class="input-group">
+            <span class="input-group-text"><i class="bi bi-search"></i></span>
+            <input @bind="searchTerm" @bind:event="oninput" class="form-control" placeholder="Search by title, author, or subject..." />
+        </div>
+    </div>
+
+    @if (resources == null)
+    {
+        <p><em>Loading resources...</em></p>
+    }
+    else if (!FilteredResources.Any())
+    {
+        <div class="alert alert-info">No resources found matching your search.</div>
+    }
+    else
+    {
+        <table class="table table-hover">
+            <thead class="table-light">
+                <tr>
+                    <th>Title</th>
+                    <th>Author</th>
+                    <th>Subject</th>
+                    <th>Filename</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var resource in FilteredResources)
+                {
+                    <tr>
+                        <td><strong>@resource.Title</strong></td>
+                        <td>@resource.Author</td>
+                        <td>@resource.Subject</td>
+                        <td>@resource.OriginalFileName</td>
+                        <td>
+                            <button class="btn btn-sm btn-success" @onclick="() => DownloadResource(resource.Id, resource.OriginalFileName)">
+                                <i class="bi bi-download"></i> Download
+                            </button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+}
+else
+{
+    <p>You are not authorized to view this page. You must be a Teacher.</p>
+}
+
+
+@code {
+    [CascadingParameter]
+    private Task<AuthenticationState> authenticationStateProviderTask { get; set; }
+    private bool isAuthorized = false;
+
+    private List<DigitalResourceDto>? resources;
+    private string searchTerm = string.Empty;
+
+    // A computed property to filter the resources based on the search term
+    private List<DigitalResourceDto> FilteredResources =>
+        resources?.Where(r =>
+            string.IsNullOrWhiteSpace(searchTerm) ||
+            r.Title.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ||
+            (r.Author != null && r.Author.Contains(searchTerm, StringComparison.OrdinalIgnoreCase)) ||
+            (r.Subject != null && r.Subject.Contains(searchTerm, StringComparison.OrdinalIgnoreCase))
+        ).ToList() ?? new List<DigitalResourceDto>();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await authenticationStateProviderTask;
+        var user = authState.User;
+        if (user.Identity != null && user.Identity.IsAuthenticated && user.IsInRole("Teacher"))
+        {
+            isAuthorized = true;
+            await LoadResources();
+        }
+    }
+
+    private async Task LoadResources()
+    {
+        try
+        {
+            resources = await Http.GetFromJsonAsync<List<DigitalResourceDto>>("api/digitalresources");
+        }
+        catch { ToastService.ShowError("Failed to load digital resources."); }
+    }
+
+    // --- THIS IS THE NEW, CORRECTED DOWNLOAD METHOD ---
+    private async Task DownloadResource(int resourceId, string fileName)
+    {
+        try
+        {
+            // 1. Use the authenticated HttpClient to GET the file from the API
+            var response = await Http.GetAsync($"api/digitalresources/download/{resourceId}");
+
+            if (response.IsSuccessStatusCode)
+            {
+                // 2. Read the file content as a byte array
+                var fileBytes = await response.Content.ReadAsByteArrayAsync();
+
+                // 3. Convert the byte array to a Base64 string for JS Interop
+                var base64String = Convert.ToBase64String(fileBytes);
+
+                // 4. Call our JavaScript helper function to trigger the download
+                await JSRuntime.InvokeVoidAsync("saveAsFile", fileName, base64String);
+                ToastService.ShowSuccess($"Downloading '{fileName}'...");
+            }
+            else
+            {
+                ToastService.ShowError("Download failed. You may not have permission or the file may be missing.");
+            }
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"An error occurred: {ex.Message}");
+        }
+    }
+}

@@ -1,0 +1,90 @@
+﻿@using LibraryManagement.Web.Models
+@using System.ComponentModel.DataAnnotations
+
+@if (IsVisible && BookToReview != null)
+{
+    <div class="modal fade show" tabindex="-1" style="display: block; z-index: 1060;" role="dialog">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <EditForm Model="@reviewModel" OnValidSubmit="HandleSubmit">
+                    <DataAnnotationsValidator />
+                    <div class="modal-header">
+                        <h5 class="modal-title">Write a Review for: <strong>@BookToReview.BookTitle</strong></h5>
+                        <button type="button" class="btn-close" @onclick="CloseModal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <!-- Star Rating Input -->
+                        <div class="mb-3">
+                            <label class="form-label">Your Rating</label>
+                            <div class="star-rating">
+                                @for (int i = 1; i <= 5; i++)
+                                {
+                                    int starNumber = i;
+                                    <span class="@(starNumber <= reviewModel.Rating ? "filled" : "")"
+                                          @onclick="() => SetRating(starNumber)">&#9733;</span>
+                                }
+                            </div>
+                            <ValidationMessage For="@(() => reviewModel.Rating)" />
+                        </div>
+
+                        <!-- Comment Input -->
+                        <div class="mb-3">
+                            <label class="form-label">Your Review (Optional)</label>
+                            <InputTextArea class="form-control" @bind-Value="reviewModel.Comment" rows="5" placeholder="Share your thoughts on the book..." />
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" @onclick="CloseModal">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Submit Review</button>
+                    </div>
+                </EditForm>
+            </div>
+        </div>
+    </div>
+    <div class="modal-backdrop fade show" style="z-index: 1055;"></div>
+}
+
+@code {
+    [Parameter]
+    public LoanDto? BookToReview { get; set; }
+
+    [Parameter]
+    public bool IsVisible { get; set; }
+
+    [Parameter]
+    public EventCallback<CreateReviewDto> OnSubmit { get; set; }
+
+    [Parameter]
+    public EventCallback OnClose { get; set; }
+
+    private CreateReviewDto reviewModel = new();
+
+    // This method is called when the component's parameters are updated
+    protected override void OnParametersSet()
+    {
+        // When the modal is made visible, we create a new instance of our model
+        // and assign the correct BookId from the LoanDto passed into the component.
+        if (IsVisible && BookToReview != null)
+        {
+            reviewModel = new CreateReviewDto
+            {
+                BookId = BookToReview.BookId
+            };
+        }
+    }
+
+    private void SetRating(int rating)
+    {
+        reviewModel.Rating = rating;
+    }
+
+    private async Task HandleSubmit()
+    {
+        await OnSubmit.InvokeAsync(reviewModel);
+    }
+
+    private async Task CloseModal()
+    {
+        await OnClose.InvokeAsync();
+    }
+}

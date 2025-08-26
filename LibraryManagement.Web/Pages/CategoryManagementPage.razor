@@ -1,0 +1,144 @@
+﻿@page "/librarian/categories"
+@using LibraryManagement.Web.Models
+@using System.ComponentModel.DataAnnotations
+@inject HttpClient Http
+@inject IJSRuntime JSRuntime
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject Blazored.Toast.Services.IToastService ToastService
+
+<PageTitle>Manage Categories</PageTitle>
+
+@if (isAuthorized)
+{
+    <h3><i class="bi bi-tags-fill"></i> Manage Book Categories</h3>
+    <p>Add, edit, or remove the categories used to classify books in the library.</p>
+    <hr />
+
+    <div class="row">
+        <!-- Add Category Form -->
+        <div class="col-md-4">
+            <div class="card shadow-sm">
+                <div class="card-header">
+                    <h4>Add New Category</h4>
+                </div>
+                <div class="card-body">
+                    <EditForm Model="@newCategoryModel" OnValidSubmit="HandleCreateCategory">
+                        <DataAnnotationsValidator />
+                        <div class="mb-3">
+                            <label class="form-label">Category Name</label>
+                            <InputText class="form-control" @bind-Value="newCategoryModel.Name" />
+                            <ValidationMessage For="@(() => newCategoryModel.Name)" />
+                        </div>
+                        <button type="submit" class="btn btn-primary">Create Category</button>
+                    </EditForm>
+                </div>
+            </div>
+        </div>
+
+        <!-- Category List -->
+        <div class="col-md-8">
+            <h4>Existing Categories</h4>
+            @if (categories == null)
+            {
+                <p><em>Loading categories...</em></p>
+            }
+            else
+            {
+                <ul class="list-group">
+                    @foreach (var category in categories)
+                    {
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            @category.Name
+                            <button class="btn btn-sm btn-danger" @onclick="() => HandleDeleteCategory(category.Id)">
+                                <i class="bi bi-trash-fill"></i> Delete
+                            </button>
+                        </li>
+                    }
+                </ul>
+            }
+        </div>
+    </div>
+}
+else
+{
+    <p>You are not authorized to view this page. You must be a Librarian.</p>
+}
+
+
+@code {
+    [CascadingParameter]
+    private Task<AuthenticationState> authenticationStateTask { get; set; }
+    private bool isAuthorized = false;
+
+    private List<Category>? categories;
+    private CategoryCreateModel newCategoryModel = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await authenticationStateTask;
+        var user = authState.User;
+        if (user.Identity != null && user.Identity.IsAuthenticated && user.IsInRole("Librarian"))
+        {
+            isAuthorized = true;
+            await LoadCategories();
+        }
+    }
+
+    private async Task LoadCategories()
+    {
+        try
+        {
+            categories = await Http.GetFromJsonAsync<List<Category>>("api/categories");
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError("Failed to load categories.");
+        }
+    }
+
+    private async Task HandleCreateCategory()
+    {
+        var response = await Http.PostAsJsonAsync("api/categories", newCategoryModel);
+        if (response.IsSuccessStatusCode)
+        {
+            ToastService.ShowSuccess("Category created successfully!");
+            newCategoryModel = new(); // Clear the form
+            await LoadCategories(); // Refresh the list
+            StateHasChanged();
+        }
+        else
+        {
+            ToastService.ShowError("Failed to create category. It may already exist.");
+        }
+    }
+
+    private async Task HandleDeleteCategory(int categoryId)
+    {
+        var confirmed = await JSRuntime.InvokeAsync<bool>("confirm", "Are you sure you want to delete this category? This cannot be undone.");
+        if (confirmed)
+        {
+            var response = await Http.DeleteAsync($"api/categories/{categoryId}");
+            if (response.IsSuccessStatusCode)
+            {
+                ToastService.ShowSuccess("Category deleted successfully.");
+                await LoadCategories(); // Refresh the list
+            }
+            else
+            {
+                var errorContent = await response.Content.ReadFromJsonAsync<ErrorResponse>();
+                ToastService.ShowError(errorContent?.Message ?? "Failed to delete category.");
+            }
+        }
+    }
+
+    // A small local model for the creation form to handle validation
+    public class CategoryCreateModel
+    {
+        [Required]
+        [StringLength(50, ErrorMessage = "Category name cannot be longer than 50 characters.")]
+        public string Name { get; set; } = string.Empty;
+    }
+
+    // A helper class to parse potential error messages from the API
+    private class ErrorResponse { public string Message { get; set; } }
+}

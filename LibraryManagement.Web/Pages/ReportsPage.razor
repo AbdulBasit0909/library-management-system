@@ -1,0 +1,164 @@
+﻿@page "/librarian/reports"
+@inject HttpClient Http
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+<PageTitle>Library Reports</PageTitle>
+
+@if (isAuthorized)
+{
+    <h3><i class="bi bi-graph-up"></i> Library Reports</h3>
+    <p>View key analytics and activity reports for the library.</p>
+    <hr />
+
+    <div class="row">
+        <!-- INVENTORY SUMMARY & FINES COLLECTED CARDS -->
+        <div class="col-lg-7 mb-4">
+            <div class="card shadow-sm h-100">
+                <div class="card-header"><h4>Inventory Summary</h4></div>
+                <div class="card-body">
+                    @if (inventorySummary == null)
+                    {
+                        <p><em>Loading...</em></p>
+                    }
+                    else
+                    {
+                        <ul class="list-group list-group-flush">
+                            <li class="list-group-item d-flex justify-content-between align-items-center"><strong>Total Unique Titles:</strong> <span class="fw-bold">@inventorySummary.TotalUniqueTitles</span></li>
+                            <li class="list-group-item d-flex justify-content-between align-items-center"><strong>Total Copies in Library:</strong> <span class="fw-bold">@inventorySummary.TotalCopiesInLibrary</span></li>
+                            <li class="list-group-item d-flex justify-content-between align-items-center"><strong>Copies on Loan:</strong> <span class="fw-bold">@inventorySummary.CopiesCurrentlyOnLoan</span></li>
+                            <li class="list-group-item d-flex justify-content-between align-items-center"><strong>Available on Shelves:</strong> <span class="fw-bold text-success fs-5">@inventorySummary.AvailableCopiesOnShelves</span></li>
+                        </ul>
+                    }
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-5 mb-4">
+            <div class="card shadow-sm h-100">
+                <div class="card-header"><h4>Fines Collected (Last 30 Days)</h4></div>
+                <div class="card-body text-center d-flex flex-column justify-content-center align-items-center">
+                    @if (finesSummary == null)
+                    {
+                        <p><em>Loading...</em></p>
+                    }
+                    else
+                    {
+                        <h1 class="display-4 text-success fw-bold">@finesSummary.TotalFines.ToString("C")</h1>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- MOST POPULAR BOOKS REPORT -->
+        <div class="col-lg-6 mb-4">
+            <div class="card shadow-sm h-100">
+                <div class="card-header"><h4>Top 10 Most Popular Books</h4></div>
+                <div class="card-body">
+                    @if (mostPopularBooks == null)
+                    {
+                        <p><em>Loading...</em></p>
+                    }
+                    else
+                    {
+                        <ul class="list-group list-group-flush">
+                            @foreach (var book in mostPopularBooks)
+                            {
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    <span>@book.Title <em class="text-muted d-block">by @book.Author</em></span>
+                                    <span class="badge bg-primary rounded-pill">@book.LoanCount loans</span>
+                                </li>
+                            }
+                        </ul>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- USER ACTIVITY REPORT -->
+        <div class="col-lg-6 mb-4">
+            <div class="card shadow-sm h-100">
+                <div class="card-header"><h4>Top 10 Most Active Users</h4></div>
+                <div class="card-body">
+                    @if (userActivity == null)
+                    {
+                        <p><em>Loading...</em></p>
+                    }
+                    else
+                    {
+                        <ul class="list-group list-group-flush">
+                            @foreach (var user in userActivity)
+                            {
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    <span>@user.UserName <em class="text-muted d-block"> @user.Email</em></span>
+                                    <span class="badge bg-success rounded-pill">@user.BooksBorrowed books</span>
+                                </li>
+                            }
+                        </ul>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+}
+else
+{
+    <p>You are not authorized to view this page.</p>
+}
+
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState> authenticationStateTask { get; set; }
+    private bool isAuthorized;
+
+    private List<PopularBookReport>? mostPopularBooks;
+    private List<UserActivityReport>? userActivity;
+    private FinesSummary? finesSummary;
+    private InventorySummary? inventorySummary;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await authenticationStateTask;
+        var user = authState.User;
+        if (user.Identity != null && user.Identity.IsAuthenticated && user.IsInRole("Librarian"))
+        {
+            isAuthorized = true;
+            await Task.WhenAll(
+                LoadMostPopularBooks(),
+                LoadUserActivity(),
+                LoadFinesSummary(),
+                LoadInventorySummary()
+            );
+        }
+    }
+
+    private async Task LoadMostPopularBooks() => mostPopularBooks = await Http.GetFromJsonAsync<List<PopularBookReport>>("api/dashboard/most-popular-books");
+    private async Task LoadUserActivity() => userActivity = await Http.GetFromJsonAsync<List<UserActivityReport>>("api/dashboard/user-activity");
+    private async Task LoadFinesSummary() => finesSummary = await Http.GetFromJsonAsync<FinesSummary>("api/dashboard/fines-collected");
+    private async Task LoadInventorySummary() => inventorySummary = await Http.GetFromJsonAsync<InventorySummary>("api/dashboard/inventory-summary");
+
+    // Helper DTO classes to match the anonymous types from the API
+    public class PopularBookReport
+    {
+        public string Title { get; set; }
+        public string Author { get; set; }
+        public int LoanCount { get; set; }
+    }
+    public class UserActivityReport
+    {
+        public string UserName { get; set; }
+        public string Email { get; set; }
+        public int BooksBorrowed { get; set; }
+    }
+    public class FinesSummary
+    {
+        public decimal TotalFines { get; set; }
+    }
+    public class InventorySummary
+    {
+        public int TotalUniqueTitles { get; set; }
+        public int TotalCopiesInLibrary { get; set; }
+        public int CopiesCurrentlyOnLoan { get; set; }
+        public int AvailableCopiesOnShelves { get; set; }
+    }
+}

@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Library Management System</title>
+    <base href="/" />
+
+    <link href="css/bootstrap/bootstrap.min.css" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+    <link href="css/app.css" rel="stylesheet" />
+    <link href="LibraryManagement.Web.styles.css" rel="stylesheet" />
+    
+    <link href="/_content/Blazored.Toast/blazored-toast.min.css" rel="stylesheet" />
+</head>
+
+<body>
+
+    <!-- This is the permanent container where Blazor will render the application. -->
+    <!-- It starts empty and is never hidden. -->
+    <div id="app"></div>
+
+    <!-- This is the temporary loader overlay. It sits on top of the #app div. -->
+    <div id="loader-wrapper">
+        <div class="loader">
+            <div data-glitch="Loading..." class="glitch">Loading...</div>
+        </div>
+    </div>
+
+    <!-- This script starts Blazor, but we prevent it from running automatically. -->
+    <script src="_framework/blazor.webassembly.js" autostart="false"></script>
+   
+    <script>
+        // This is a reliable, modern way to initialize.
+        Blazor.start().then(function () {
+            // This code runs AFTER Blazor is ready.
+            var loader = document.getElementById('loader-wrapper');
+            if (loader) {
+                // Fade out the loader and then remove it completely from the page.
+                loader.style.opacity = '0';
+                setTimeout(() => loader.remove(), 500); // Wait for fade to finish
+            }
+        });
+
+    </script>
+    <!-- --- THIS IS THE DEFINITIVE FIX --- -->
+    <!-- The JavaScript function is now embedded directly in the HTML. -->
+    <!-- It cannot fail to load. -->
+    <script>
+        window.saveAsFile = (fileName, byteBase64) => {
+            var link = document.createElement('a');
+            link.download = fileName;
+            link.href = "data:application/octet-stream;base64," + byteBase64;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        };
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,110 @@
+﻿@using LibraryManagement.Web.Auth
+@using LibraryManagement.Web.Components 
+@using Microsoft.AspNetCore.Components.Authorization
+@using Blazored.LocalStorage
+
+@inject NavigationManager NavigationManager
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject ILocalStorageService localStorage
+
+<div class="top-row ps-3 navbar navbar-dark main-navbar">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="">📚 Library System</a>
+
+      
+
+        <button title="Navigation menu" class="navbar-toggler" @onclick="ToggleNavMenu">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+    </div>
+</div>
+
+<div class="@NavMenuCssClass nav-scrollable side-nav" @onclick="ToggleNavMenu">
+    <nav class="flex-column">
+        
+        <!-- All of your original sidebar links are restored here -->
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
+                <span class="bi bi-house-door-fill-nav-menu" aria-hidden="true"></span> Home
+            </NavLink>
+        </div>
+
+        <AuthorizeView>
+            <Authorized>
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="profile">
+                        <span class="bi bi-person-fill" aria-hidden="true"></span> My Profile
+                    </NavLink>
+                </div>
+
+                <!-- --- ADD THIS NEW NAVLINK ITEM --- -->
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="my-reading-list">
+                        <span class="bi bi-bookmark-heart-fill" aria-hidden="true"></span> My Reading List
+                    </NavLink>
+                </div>
+                @if (context.User.IsInRole("Librarian"))
+                {
+                    <div class="nav-item px-3">
+                        <NavLink class="nav-link librarian-dashboard-link" href="librarian/dashboard">
+                            <span class="bi bi-journal-bookmark-fill" aria-hidden="true"></span> Librarian Dashboard
+                        </NavLink>
+                    </div>
+                }
+                @if (context.User.IsInRole("Teacher"))
+                {
+                    <div class="nav-item px-3">
+                        <NavLink class="nav-link teacher-dashboard-link" href="teacher/dashboard">
+                            <span class="bi bi-easel-fill" aria-hidden="true"></span> Teacher Dashboard
+                        </NavLink>
+                    </div>
+                }
+                @if (context.User.IsInRole("Student"))
+                {
+                    <div class="nav-item px-3">
+                        <NavLink class="nav-link student-dashboard-link" href="student/dashboard">
+                            <span class="bi bi-mortarboard-fill" aria-hidden="true"></span> Student Dashboard
+                        </NavLink>
+                    </div>
+                }
+
+                <div class="nav-item px-3">
+                    <button class="nav-link btn btn-link logout-btn" @onclick="HandleLogout">
+                        <span class="bi bi-box-arrow-left" aria-hidden="true"></span> Logout (@context.User.Identity?.Name)
+                    </button>
+                </div>
+            </Authorized>
+
+            <NotAuthorized>
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="register">
+                        <span class="bi bi-person-plus-fill" aria-hidden="true"></span> Register
+                    </NavLink>
+                </div>
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="login">
+                        <span class="bi bi-box-arrow-in-right" aria-hidden="true"></span> Login
+                    </NavLink>
+                </div>
+            </NotAuthorized>
+        </AuthorizeView>
+    </nav>
+</div>
+
+@code {
+    private bool collapseNavMenu = true;
+    private string? NavMenuCssClass => collapseNavMenu ? "collapse" : null;
+
+    private void ToggleNavMenu()
+    {
+        collapseNavMenu = !collapseNavMenu;
+    }
+
+    private async Task HandleLogout()
+    {
+        await localStorage.RemoveItemAsync("authToken");
+        var authProvider = (ApiAuthenticationStateProvider)AuthenticationStateProvider;
+        authProvider.MarkUserAsLoggedOut();
+        NavigationManager.NavigateTo("/", forceLoad: true);
+    }
+    }

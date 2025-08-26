@@ -1,0 +1,250 @@
+﻿@page "/my-books"
+@using LibraryManagement.Web.Models
+@using LibraryManagement.Web.Components
+@using System.Text.Json
+@inject HttpClient Http
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject Blazored.Toast.Services.IToastService ToastService
+
+<PageTitle>My Books</PageTitle>
+
+@if (isAuthorized)
+{
+    <h3><i class="bi bi-book-fill"></i> My Books</h3>
+    <p>View your current and past book Borrowed.</p>
+    <hr />
+
+    <ul class="nav nav-tabs mb-3">
+        <li class="nav-item">
+            <button class="nav-link @(activeTab == "current" ? "active" : "")" @onclick='() => SetActiveTab("current")'>
+                Currently Borrowed
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link @(activeTab == "history" ? "active" : "")" @onclick='() => SetActiveTab("history")'>
+                Borrowing History
+            </button>
+        </li>
+    </ul>
+
+    @if (activeTab == "current")
+    {
+        @if (myLoans == null)
+        {
+            <p><em>Loading...</em></p>
+        }
+        else if (!myLoans.Any())
+        {
+            <div class="alert alert-success">You have no books currently borrowed.</div>
+        }
+        else
+        {
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>Title</th>
+                        <th>Borrowed On</th>
+                        <th>Due Date</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var loan in myLoans)
+                    {
+                        var isOverdue = DateTime.UtcNow.Date > loan.DueDate.Date;
+                        <tr class="@(isOverdue ? "table-danger" : "")">
+                            <td>@loan.BookTitle</td>
+                            <td>@loan.LoanDate.ToShortDateString()</td>
+                            <td>@loan.DueDate.ToShortDateString()</td>
+                            <td>
+                                @if (isOverdue)
+                                {
+                                    <strong>OVERDUE</strong>
+                                }
+                                else
+                                {
+                                    var daysRemaining = (loan.DueDate.Date - DateTime.UtcNow.Date).Days;
+                                    if (daysRemaining <= 0)
+                                    {
+                                        <span class="text-warning fw-bold">Due Today</span>
+                                    }
+                                    else
+                                    {
+                                        <span>Due in @daysRemaining day(s)</span>
+                                    }
+                                }
+                            </td>
+                            <td>
+                                <button class="btn btn-sm btn-info" @onclick="() => RenewLoan(loan.Id)">
+                                    <i class="bi bi-arrow-clockwise"></i> Renew
+                                </button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    }
+    else if (activeTab == "history")
+    {
+        @if (loanHistory == null)
+        {
+            <p><em>Loading history...</em></p>
+        }
+        else if (!loanHistory.Any())
+        {
+            <div class="alert alert-info">You have no past borrowing history.</div>
+        }
+        else
+        {
+            <!-- THIS TABLE HAS BEEN UPDATED -->
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Title</th>
+                        <th>Loaned On</th>
+                        <th>Fine Paid</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var loan in loanHistory)
+                    {
+                        <tr>
+                            <td>@loan.BookTitle</td>
+                            <td>@loan.LoanDate.ToShortDateString()</td>
+                            <td>@loan.FineAmount.ToString("C")</td>
+                            <td>
+                                <button class="btn btn-sm btn-outline-primary" @onclick="() => OpenReviewModal(loan)">
+                                    <i class="bi bi-star-fill"></i> Add Review
+                                </button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    }
+}
+else
+{
+    <p>You must be logged in to view this page.</p>
+}
+
+@if (!string.IsNullOrEmpty(errorMessage))
+{
+    <div class="alert alert-danger mt-3">@errorMessage</div>
+}
+
+<!-- The new ReviewFormModal component is added here -->
+<ReviewFormModal IsVisible="isReviewModalVisible"
+                 BookToReview="selectedLoanForReview"
+                 OnClose="CloseReviewModal"
+                 OnSubmit="HandleReviewSubmit" />
+@code {
+    [CascadingParameter]
+    private Task<AuthenticationState> authenticationStateTask { get; set; }
+    private bool isAuthorized = false;
+    private string activeTab = "current";
+
+    private List<LoanDto>? myLoans;
+    private List<LoanDto>? loanHistory;
+    private string? errorMessage;
+
+    // --- State for Review Modal ---
+    private bool isReviewModalVisible = false;
+    private LoanDto? selectedLoanForReview;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await authenticationStateTask;
+        var user = authState.User;
+        if (user.Identity != null && user.Identity.IsAuthenticated && (user.IsInRole("Student") || user.IsInRole("Teacher")))
+        {
+            isAuthorized = true;
+            try
+            {
+                await LoadMyLoans();
+                loanHistory = await Http.GetFromJsonAsync<List<LoanDto>>("api/loans/myhistory");
+            }
+            catch (Exception ex)
+            {
+                errorMessage = $"Failed to load your books: {ex.Message}";
+            }
+        }
+    }
+
+    private async Task LoadMyLoans()
+    {
+        myLoans = await Http.GetFromJsonAsync<List<LoanDto>>("api/loans/myloans");
+    }
+
+    private async Task RenewLoan(int loanId)
+    {
+        var response = await Http.PostAsync($"api/loans/renew/{loanId}", null);
+        if (response.IsSuccessStatusCode)
+        {
+            var result = await response.Content.ReadFromJsonAsync<RenewResponse>();
+            ToastService.ShowSuccess(result?.Message ?? "Book renewed successfully!");
+            await LoadMyLoans();
+        }
+        else
+        {
+            var errorContent = await response.Content.ReadFromJsonAsync<ErrorResponse>();
+            ToastService.ShowError(errorContent?.Message ?? "Failed to renew the book.");
+        }
+    }
+
+    private void SetActiveTab(string tabName)
+    {
+        activeTab = tabName;
+    }
+
+    // --- Methods for Review Modal ---
+    private void OpenReviewModal(LoanDto loanToReview)
+    {
+        // This ensures we have a valid reference to the selected loan.
+        selectedLoanForReview = loanToReview;
+        isReviewModalVisible = true;
+    }
+
+    private void CloseReviewModal()
+    {
+        isReviewModalVisible = false;
+        selectedLoanForReview = null;
+    }
+
+    private async Task HandleReviewSubmit(CreateReviewDto reviewModel)
+    {
+        if (selectedLoanForReview == null)
+        {
+            ToastService.ShowError("An error occurred. No book was selected for review.");
+            return;
+        }
+
+        // This is the critical line. It assigns the BookId from the selected loan
+        // to the review model that will be sent to the API.
+        reviewModel.BookId = selectedLoanForReview.BookId;
+
+        var response = await Http.PostAsJsonAsync("api/reviews", reviewModel);
+        if (response.IsSuccessStatusCode)
+        {
+            ToastService.ShowSuccess("Thank you! Your review has been submitted.");
+            CloseReviewModal();
+            // We should refresh the history to disable the button in a future step.
+        }
+        else
+        {
+            // Read the error message from the JSON response.
+            var errorResponse = await response.Content.ReadFromJsonAsync<ErrorResponse>();
+            ToastService.ShowError(errorResponse?.Message ?? "Failed to submit review.");
+        }
+    }
+
+    // --- Helper classes ---
+    private class RenewResponse { public string Message { get; set; } }
+    private class ErrorResponse { public string Message { get; set; } }
+}
+ 
+}

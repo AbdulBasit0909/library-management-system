@@ -1,0 +1,212 @@
+﻿@page "/librarian/resources"
+@using LibraryManagement.Web.Models
+@using System.ComponentModel.DataAnnotations
+@inject HttpClient Http
+@inject IJSRuntime JSRuntime
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject Blazored.Toast.Services.IToastService ToastService
+
+<PageTitle>Manage Digital Resources</PageTitle>
+
+@if (isAuthorized)
+{
+    <h3><i class="bi bi-file-earmark-arrow-up-fill"></i> Manage Digital Resources</h3>
+    <p>Upload and manage the library's collection of e-books and academic papers.</p>
+    <hr />
+
+    <div class="row">
+        <!-- Upload Form -->
+        <div class="col-md-4 mb-4">
+            <div class="card shadow-sm">
+                <div class="card-header"><h4>Upload New Resource</h4></div>
+                <div class="card-body">
+                    <EditForm Model="@uploadModel" OnValidSubmit="HandleUpload">
+                        <DataAnnotationsValidator />
+                        <div class="mb-3">
+                            <label class="form-label">Title</label>
+                            <InputText class="form-control" @bind-Value="uploadModel.Title" />
+                            <ValidationMessage For="@(() => uploadModel.Title)" />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Author</label>
+                            <InputText class="form-control" @bind-Value="uploadModel.Author" />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Subject / Topic</label>
+                            <InputText class="form-control" @bind-Value="uploadModel.Subject" />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">PDF File</label>
+                            <InputFile class="form-control" OnChange="HandleFileSelected" />
+                            <ValidationMessage For="@(() => uploadModel.File)" />
+                        </div>
+                        <button type="submit" class="btn btn-primary" disabled="@isUploading">
+                            @if (isUploading)
+                            {
+                                <span class="spinner-border spinner-border-sm"></span>
+                                <span> Uploading...</span>
+                            }
+                            else
+                            {
+                                <span>Upload Resource</span>
+                            }
+                        </button>
+                    </EditForm>
+                </div>
+            </div>
+        </div>
+
+        <!-- Existing Resources List -->
+        <div class="col-md-8">
+            <h4>Existing Resources</h4>
+            @if (resources == null)
+            {
+                <p><em>Loading resources...</em></p>
+            }
+            else
+            {
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>Title</th>
+                            <th>Author</th>
+                            <th>Subject</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var resource in resources)
+                        {
+                            <tr>
+                                <td>@resource.Title</td>
+                                <td>@resource.Author</td>
+                                <td>@resource.Subject</td>
+                                <td>
+                                    <button class="btn btn-sm btn-danger" @onclick="() => HandleDelete(resource.Id)">
+                                        <i class="bi bi-trash-fill"></i> Delete
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </div>
+    </div>
+}
+else
+{
+    <p>You are not authorized to view this page. You must be a Librarian.</p>
+}
+
+
+@code {
+    [CascadingParameter]
+    private Task<AuthenticationState> authenticationStateProviderTask { get; set; }
+    private bool isAuthorized = false;
+    private bool isUploading = false;
+
+    private List<DigitalResourceDto>? resources;
+    private UploadResourceModel uploadModel = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await authenticationStateProviderTask;
+        var user = authState.User;
+        if (user.Identity != null && user.Identity.IsAuthenticated && user.IsInRole("Librarian"))
+        {
+            isAuthorized = true;
+            await LoadResources();
+        }
+    }
+
+    private async Task LoadResources()
+    {
+        try
+        {
+            // This GET endpoint is secured for Teachers, but we need to see the list as a Librarian.
+            // Let's modify the API to allow Librarians to see this list as well.
+            resources = await Http.GetFromJsonAsync<List<DigitalResourceDto>>("api/digitalresources");
+        }
+        catch { ToastService.ShowError("Failed to load digital resources."); }
+    }
+
+    private void HandleFileSelected(InputFileChangeEventArgs e)
+    {
+        uploadModel.File = e.File;
+    }
+
+    private async Task HandleUpload()
+    {
+        if (uploadModel.File == null)
+        {
+            ToastService.ShowError("Please select a file to upload.");
+            return;
+        }
+
+        isUploading = true;
+
+        // We must use MultipartFormDataContent to send files to the API
+        using var content = new MultipartFormDataContent();
+        content.Add(new StringContent(uploadModel.Title), "Title");
+        content.Add(new StringContent(uploadModel.Author ?? ""), "Author");
+        content.Add(new StringContent(uploadModel.Subject ?? ""), "Subject");
+
+        // Use a StreamContent for the file
+        var fileContent = new StreamContent(uploadModel.File.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024)); // 10MB limit
+        fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(uploadModel.File.ContentType);
+        content.Add(fileContent, "File", uploadModel.File.Name);
+
+        try
+        {
+            var response = await Http.PostAsync("api/digitalresources/upload", content);
+            if (response.IsSuccessStatusCode)
+            {
+                ToastService.ShowSuccess("Resource uploaded successfully!");
+                uploadModel = new(); // Reset the form
+                await LoadResources(); // Refresh the list
+            }
+            else
+            {
+                ToastService.ShowError("Upload failed. Please check the file and try again.");
+            }
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"An error occurred: {ex.Message}");
+        }
+        finally
+        {
+            isUploading = false;
+        }
+    }
+
+    private async Task HandleDelete(int resourceId)
+    {
+        var confirmed = await JSRuntime.InvokeAsync<bool>("confirm", "Are you sure you want to permanently delete this resource?");
+        if (confirmed)
+        {
+            var response = await Http.DeleteAsync($"api/digitalresources/{resourceId}");
+            if (response.IsSuccessStatusCode)
+            {
+                ToastService.ShowSuccess("Resource deleted successfully.");
+                await LoadResources();
+            }
+            else
+            {
+                ToastService.ShowError("Failed to delete the resource.");
+            }
+        }
+    }
+
+    // A local model for the form with validation
+    public class UploadResourceModel
+    {
+        [Required(ErrorMessage = "A title is required.")]
+        public string Title { get; set; } = string.Empty;
+        public string? Author { get; set; }
+        public string? Subject { get; set; }
+        [Required(ErrorMessage = "Please select a file.")]
+        public IBrowserFile? File { get; set; }
+    }
+}

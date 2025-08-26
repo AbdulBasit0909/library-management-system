@@ -1,0 +1,73 @@
+﻿@page "/teacher/dashboard"
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+<PageTitle>Teacher Dashboard</PageTitle>
+
+@if (isAuthorized)
+{
+    <div class="teacher-dashboard-background">
+        <div class="dashboard-overlay">
+            <h3 class="dashboard-title"><i class="bi bi-person-workspace"></i> Teacher Dashboard</h3>
+            <p class="dashboard-subtitle">Welcome, <strong>@username</strong>! Find resources for your classes.</p>
+            <hr class="dashboard-divider" />
+
+            <div class="row">
+                <div class="col-md-4 mb-4">
+                    <div class="card shadow-sm h-100 text-center">
+                        <div class="card-body d-flex flex-column">
+                            <i class="bi bi-search fs-1 text-primary mb-3"></i>
+                            <h5 class="card-title">Search Book Catalog</h5>
+                            <p class="card-text">Find and explore the library's vast collection of books.</p>
+                            <a href="/catalog" class="btn btn-primary mt-auto">Start Searching</a>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-4 mb-4">
+                    <div class="card shadow-sm h-100 text-center">
+                        <div class="card-body d-flex flex-column">
+                            <i class="bi bi-book fs-1 text-success mb-3"></i>
+                            <h5 class="card-title">My Borrowed Books</h5>
+                            <p class="card-text">View your currently borrowed books and their due dates.</p>
+                            <a href="/my-books" class="btn btn-success mt-auto">View My Books</a>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4 mb-4">
+                    <div class="card shadow-sm h-100 text-center">
+                        <div class="card-body d-flex flex-column">
+                            <i class="bi bi-collection-fill fs-1 text-info mb-3"></i>
+                            <h5 class="card-title">Browse E-Resources</h5>
+                            <p class="card-text">Access the library's collection of academic journals and papers.</p>
+                            <a href="/teacher/resources" class="btn btn-info mt-auto">Go to Resources</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+else
+{
+    <p>You are not authorized to view this page. You must be a Teacher.</p>
+}
+
+@code {
+    [CascadingParameter]
+    private Task<AuthenticationState> authenticationStateTask { get; set; }
+
+    private bool isAuthorized = false;
+    private string username = "user";
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await authenticationStateTask;
+        var user = authState.User;
+
+        if (user.Identity != null && user.Identity.IsAuthenticated && user.IsInRole("Teacher"))
+        {
+            isAuthorized = true;
+            username = user.Identity.Name ?? "Teacher";
+        }
+    }
+}

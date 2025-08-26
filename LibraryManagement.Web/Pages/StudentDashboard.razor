@@ -1,0 +1,63 @@
+﻿@page "/student/dashboard"
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+<PageTitle>Student Dashboard</PageTitle>
+
+
+@if (isAuthorized)
+{
+    <div class="student-dashboard-background">
+        <div class="dashboard-overlay">
+            <h3 class="dashboard-title"><i class="bi bi-backpack-fill"></i> Student Dashboard</h3>
+            <p class="dashboard-subtitle">Welcome, <strong>@username</strong>! Let's get learning.</p>
+            <hr class="dashboard-divider" />
+
+            <div class="row">
+                <div class="col-md-6 mb-4">
+                    <div class="card shadow-sm h-100 text-center">
+                        <div class="card-body d-flex flex-column">
+                            <i class="bi bi-search fs-1 text-primary mb-3"></i>
+                            <h5 class="card-title">Search the Catalog</h5>
+                            <p class="card-text">Find the books you need for your studies and assignments.</p>
+                            <a href="/catalog" class="btn btn-primary mt-auto">Start Searching</a>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-6 mb-4">
+                    <div class="card shadow-sm h-100 text-center">
+                        <div class="card-body d-flex flex-column">
+                            <i class="bi bi-book-fill fs-1 text-success mb-3"></i>
+                            <h5 class="card-title">My Borrowed Books</h5>
+                            <p class="card-text">Keep track of your borrowed books and check their due dates.</p>
+                            <a href="/my-books" class="btn btn-success mt-auto">View My Books</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+else
+{
+    <p>You are not authorized to view this page. You must be a Student.</p>
+}
+@code {
+    [CascadingParameter]
+    private Task<AuthenticationState> authenticationStateTask { get; set; }
+
+    private bool isAuthorized = false;
+    private string username = "user";
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await authenticationStateTask;
+        var user = authState.User;
+
+        if (user.Identity != null && user.Identity.IsAuthenticated && user.IsInRole("Student"))
+        {
+            isAuthorized = true;
+            username = user.Identity.Name ?? "Student";
+        }
+    }
+}

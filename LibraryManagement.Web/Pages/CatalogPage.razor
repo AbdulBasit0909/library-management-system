@@ -1,0 +1,189 @@
+﻿@page "/catalog"
+@using LibraryManagement.Web.Models
+@using LibraryManagement.Web.Components
+@inject HttpClient Http
+@inject Blazored.Toast.Services.IToastService ToastService
+
+<PageTitle>Book Catalog</PageTitle>
+
+<h3><i class="bi bi-search"></i> Search Our Catalog</h3>
+<p>Find the books you need for your studies and assignments.</p>
+<hr />
+
+<!-- --- THIS IS THE MISSING UI SECTION --- -->
+<div class="row mb-4 align-items-center">
+    <!-- Category Filter Dropdown -->
+    <div class="col-md-5">
+        <div class="input-group">
+            <span class="input-group-text"><i class="bi bi-tags-fill"></i></span>
+            <select class="form-select" @onchange="CategoryFilterChanged">
+                <option value="0">-- Filter by Category --</option>
+                @if (categories != null)
+                {
+                    @foreach (var category in categories)
+                    {
+                        <option value="@category.Id">@category.Name</option>
+                    }
+                }
+            </select>
+        </div>
+    </div>
+    <!-- Text Search Input -->
+    <div class="col-md-7">
+        <div class="input-group">
+            <input @bind="searchTerm" @bind:event="oninput" @onkeyup="@(e => { if (e.Code == "Enter") SearchBooks(); })" type="text" class="form-control" placeholder="Search by title or author..." />
+            <button class="btn btn-primary" @onclick="SearchBooks"><i class="bi bi-search"></i> Search</button>
+        </div>
+    </div>
+</div>
+<!-- --- END OF MISSING UI SECTION --- -->
+@if (pagedResult == null)
+{
+    <p><em>Loading books...</em></p>
+}
+else if (pagedResult.Items.Any())
+{
+    <!-- Grid layout using the BookCard component -->
+    <div class="row row-cols-1 row-cols-sm-2 row-cols-md-3 row-cols-lg-4 g-4">
+        @foreach (var book in pagedResult.Items)
+        {
+            <div class="col">
+                <BookCard Book="book" OnShowDetails="ShowBookDetails" />
+            </div>
+        }
+    </div>
+
+    <!-- Pagination Component -->
+    <Pagination CurrentPage="@pagedResult.CurrentPage"
+                TotalPages="@pagedResult.TotalPages"
+                OnPageChanged="HandlePageChanged" />
+}
+else
+{
+    <div class="alert alert-info">No books found matching the selected criteria.</div>
+}
+
+<!-- The BookDetailsModal component -->
+<BookDetailsModal Book="selectedBook"
+                  IsVisible="isModalVisible"
+                  OnClose="CloseBookDetailsModal"
+                  OnRequestBook="RequestBook"
+                  OnRecommendationClicked="HandleRecommendationClick" />
+
+
+@if (!string.IsNullOrEmpty(errorMessage))
+{
+    <div class="alert alert-danger mt-3">@errorMessage</div>
+}
+
+
+@code {
+    private PagedResult<Book>? pagedResult;
+    private List<Category>? categories;
+    private string? errorMessage;
+    private int currentPage = 1;
+    private int selectedCategoryId = 0;
+    private string searchTerm = string.Empty;
+
+    // --- State for the modal ---
+    private Book? selectedBook;
+    private bool isModalVisible = false;
+    // --- ADD THIS NEW HANDLER METHOD ---
+    private void HandleRecommendationClick(Book recommendedBook)
+    {
+        // This closes the current modal and immediately re-opens it with the new book's data.
+        CloseBookDetailsModal();
+        ShowBookDetails(recommendedBook);
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            categories = await Http.GetFromJsonAsync<List<Category>>("api/categories");
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Failed to load categories: {ex.Message}";
+        }
+        await LoadBooks();
+    }
+
+    private async Task LoadBooks()
+    {
+        try
+        {
+            var apiUrl = $"api/Books?pageNumber={currentPage}";
+            if (selectedCategoryId > 0)
+            {
+                apiUrl += $"&categoryId={selectedCategoryId}";
+            }
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+            {
+                apiUrl += $"&searchTerm={Uri.EscapeDataString(searchTerm)}";
+            }
+            pagedResult = await Http.GetFromJsonAsync<PagedResult<Book>>(apiUrl);
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Failed to load book catalog: {ex.Message}";
+        }
+    }
+
+    // --- Methods to control the modal ---
+    private void ShowBookDetails(Book book)
+    {
+        selectedBook = book;
+        isModalVisible = true;
+        StateHasChanged();
+    }
+
+    private void CloseBookDetailsModal()
+    {
+        isModalVisible = false;
+        selectedBook = null;
+        StateHasChanged();
+    }
+
+    private async Task RequestBook(int bookId)
+    {
+        try
+        {
+            var response = await Http.PostAsJsonAsync($"api/reservations/{bookId}", new { });
+            if (response.IsSuccessStatusCode)
+            {
+                ToastService.ShowSuccess("Your reservation request has been sent!");
+            }
+            else
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                ToastService.ShowError($"Failed to send request: {response.ReasonPhrase}. {errorContent}");
+            }
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"A connection error occurred: {ex.Message}");
+        }
+    }
+
+    // --- Handler Methods for UI ---
+    private async Task HandlePageChanged(int newPageNumber)
+    {
+        currentPage = newPageNumber;
+        await LoadBooks();
+    }
+
+    private async Task SearchBooks()
+    {
+        currentPage = 1;
+        await LoadBooks();
+    }
+
+    private async Task CategoryFilterChanged(ChangeEventArgs e)
+    {
+        selectedCategoryId = int.Parse(e.Value.ToString());
+        currentPage = 1;
+        await LoadBooks();
+    }
+}

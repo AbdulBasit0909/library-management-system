@@ -1,0 +1,90 @@
+﻿@using LibraryManagement.Web.Models
+@inject HttpClient Http
+
+<EditForm Model="@Book" OnValidSubmit="OnValidSubmit">
+    <DataAnnotationsValidator />
+    <div class="mb-3">
+        <label class="form-label">Title</label>
+        <InputText class="form-control" @bind-Value="Book.Title" />
+        <ValidationMessage For="@(() => Book.Title)" />
+    </div>
+    <div class="mb-3">
+        <label class="form-label">Author</label>
+        <InputText class="form-control" @bind-Value="Book.Author" />
+        <ValidationMessage For="@(() => Book.Author)" />
+    </div>
+
+    <!-- --- ADD COVER IMAGE URL FIELD --- -->
+    <div class="mb-3">
+        <label class="form-label">Cover Image URL</label>
+        <InputText class="form-control" @bind-Value="Book.CoverImageUrl" placeholder="https://example.com/image.jpg" />
+    </div>
+
+    <!-- --- ADD DESCRIPTION FIELD --- -->
+    <div class="mb-3">
+        <label class="form-label">Description</label>
+        <InputTextArea class="form-control" @bind-Value="Book.Description" rows="4" />
+    </div>
+
+    <!-- --- NEW CATEGORY DROPDOWN --- -->
+    <div class="mb-3">
+        <label class="form-label">Category</label>
+        <InputSelect class="form-select" @bind-Value="Book.CategoryId">
+            <option value="">-- Select a Category --</option>
+            @if (categories != null)
+            {
+                @foreach (var category in categories)
+                {
+                    <option value="@category.Id">@category.Name</option>
+                }
+            }
+        </InputSelect>
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label">ISBN</label>
+        <InputText class="form-control" @bind-Value="Book.ISBN" />
+        <ValidationMessage For="@(() => Book.ISBN)" />
+    </div>
+    <div class="row">
+        <div class="col-md-6 mb-3">
+            <label class="form-label">Published Date</label>
+            <InputDate class="form-control" @bind-Value="Book.PublishedDate" />
+        </div>
+        <div class="col-md-6 mb-3">
+            <label class="form-label">Quantity</label>
+            <InputNumber class="form-control" @bind-Value="Book.Quantity" />
+            <ValidationMessage For="@(() => Book.Quantity)" />
+        </div>
+    </div>
+    <button type="submit" class="btn btn-primary">@ButtonText</button>
+    <a href="/books" class="btn btn-secondary">Cancel</a>
+</EditForm>
+
+@code {
+    [Parameter, EditorRequired]
+    public Book Book { get; set; } = new();
+
+    [Parameter]
+    public string ButtonText { get; set; } = "Save";
+
+    [Parameter, EditorRequired]
+    public EventCallback OnValidSubmit { get; set; }
+
+    // This list will hold the categories fetched from the API
+    private List<Category>? categories;
+
+    // Fetch the categories when the component is initialized
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            categories = await Http.GetFromJsonAsync<List<Category>>("api/categories");
+        }
+        catch (Exception ex)
+        {
+            // Handle error appropriately, maybe log it or show a toast
+            Console.WriteLine($"Failed to load categories: {ex.Message}");
+        }
+    }
+}

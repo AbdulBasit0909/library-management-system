@@ -1,0 +1,50 @@
+﻿@page "/books/add"
+@using LibraryManagement.Web.Models
+@using LibraryManagement.Web.Components
+@inject HttpClient Http
+@inject NavigationManager NavigationManager
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject Blazored.Toast.Services.IToastService ToastService
+
+@if (isAuthorized)
+{
+    <h3>Add New Book</h3>
+    <hr />
+    <BookForm Book="@book" ButtonText="Create Book" OnValidSubmit="HandleSubmit" />
+}
+else
+{
+    <p>You are not authorized to view this page. You must be a Librarian.</p>
+}
+
+
+@code {
+    [CascadingParameter]
+    private Task<AuthenticationState> authenticationStateTask { get; set; }
+    private bool isAuthorized = false;
+    private Book book = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await authenticationStateTask;
+        var user = authState.User;
+        if (user.Identity != null && user.Identity.IsAuthenticated && user.IsInRole("Librarian"))
+        {
+            isAuthorized = true;
+        }
+    }
+
+    private async Task HandleSubmit()
+    {
+        var response = await Http.PostAsJsonAsync("api/Books", book);
+        if (response.IsSuccessStatusCode)
+        {
+            ToastService.ShowSuccess("New book added successfully!");
+            NavigationManager.NavigateTo("/books");
+        }
+        else
+        {
+            ToastService.ShowError("Failed to add new book.");
+        }
+    }
+}

@@ -1,0 +1,120 @@
+﻿@using System.Text.RegularExpressions
+@inject HttpClient Http
+@inject NavigationManager NavigationManager
+
+<div class="chatbot-window">
+    <div class="chat-header">
+        <span>Librarian AI Assistant</span>
+        <button type="button" class="btn-close" @onclick="CloseWindow"></button>
+    </div>
+    <div class="chat-history">
+        @foreach (var message in messages)
+        {
+            <div class="chat-message @(message.IsUser ? "user-message" : "ai-message")">
+                @((MarkupString)message.Content)
+            </div>
+        }
+        @if (isWaitingForResponse)
+        {
+            <div class="chat-message ai-message">
+                <em>Thinking...</em>
+            </div>
+        }
+    </div>
+    <!-- This is the new input area -->
+    <div class="chat-input-area">
+        <input @bind="currentMessage" @bind:event="oninput" @onkeyup="HandleKeyPress" class="form-control" type="text" placeholder="Ask a question..." />
+        <button class="chat-send-btn" @onclick="SendMessageAsync" disabled="@isWaitingForResponse">
+            <i class="bi bi-send-fill"></i>
+        </button>
+    </div>
+</div>
+
+
+@code {
+    [Parameter]
+    public EventCallback OnClose { get; set; }
+
+    private List<ChatMessage> messages = new();
+    private string currentMessage = string.Empty;
+    private bool isWaitingForResponse = false;
+
+    protected override void OnInitialized()
+    {
+        // Add the initial welcome message from the AI
+        messages.Add(new ChatMessage { Content = "Hello! How can I help you find a book today?", IsUser = false });
+    }
+
+    private async Task SendMessageAsync()
+    {
+        if (string.IsNullOrWhiteSpace(currentMessage) || isWaitingForResponse) return;
+
+        var userMessage = currentMessage;
+        messages.Add(new ChatMessage { Content = userMessage, IsUser = true });
+        currentMessage = string.Empty; // Clear the input
+        isWaitingForResponse = true;
+
+        try
+        {
+            var response = await Http.PostAsJsonAsync("api/chatbot/query", new { Query = userMessage });
+            if (response.IsSuccessStatusCode)
+            {
+                var result = await response.Content.ReadFromJsonAsync<ChatResponse>();
+                // Format the AI response to make book titles clickable
+                var formattedResponse = FormatAiResponse(result.Response);
+                messages.Add(new ChatMessage { Content = formattedResponse, IsUser = false });
+            }
+            else
+            {
+                messages.Add(new ChatMessage { Content = "Sorry, I encountered an error. Please try again.", IsUser = false });
+            }
+        }
+        catch
+        {
+            messages.Add(new ChatMessage { Content = "Sorry, I couldn't connect to the server.", IsUser = false });
+        }
+        finally
+        {
+            isWaitingForResponse = false;
+        }
+    }
+
+    private string FormatAiResponse(string response)
+    {
+        // Use Regex to find any text between **...**
+        var regex = new Regex(@"\*\*(.*?)\*\*");
+        return regex.Replace(response, match =>
+        {
+            // Get the book title from the match
+            var bookTitle = match.Groups[1].Value;
+            // Create a URL-encoded version for the query string
+            var encodedTitle = Uri.EscapeDataString(bookTitle);
+            // Replace the **...** with an <a> tag
+            return $"<a href='/catalog?searchTerm={encodedTitle}'>{bookTitle}</a>";
+        });
+    }
+
+    private async Task HandleKeyPress(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await SendMessageAsync();
+        }
+    }
+
+    private async Task CloseWindow()
+    {
+        await OnClose.InvokeAsync();
+    }
+
+    // --- Helper Classes ---
+    private class ChatMessage
+    {
+        public string Content { get; set; }
+        public bool IsUser { get; set; }
+    }
+    private class ChatResponse
+    {
+        public string Response { get; set; }
+    }
+}

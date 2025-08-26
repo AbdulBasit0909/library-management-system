@@ -1,0 +1,95 @@
+﻿@page "/librarian/dashboard"
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+<PageTitle>Librarian Dashboard</PageTitle>
+
+@if (isAuthorized)
+{
+    <div class="dashboard-container">
+        <div class="dashboard-header">
+            <h1><i class="bi bi-journal-bookmark-fill"></i> Librarian Dashboard</h1>
+            <p>Welcome, <strong>@username</strong>! Manage books, users, and library operations here.</p>
+        </div>
+
+        <div class="dashboard-grid">
+            <div class="dashboard-card" style="--card-color:#4facfe;">
+                <i class="bi bi-book-half"></i>
+                <h3>Manage Book Catalog</h3>
+                <p>Add, edit, or remove books from the library's collection.</p>
+                <a href="/books" class="gradient-btn blue">Go to Catalog</a>
+            </div>
+
+            <div class="dashboard-card" style="--card-color:#43e97b;">
+                <i class="bi bi-arrow-left-right"></i>
+                <h3>Issue & Return Books</h3>
+                <p>Manage the circulation of all library books.</p>
+                <a href="/librarian/issue-return" class="gradient-btn green">Go to Desk</a>
+            </div>
+
+            <!-- --- ADD THIS NEW CARD --- -->
+            <div class="dashboard-card" style="--card-color:#30cfd0;">
+                <i class="bi bi-file-earmark-arrow-up-fill"></i>
+                <h3>Digital Resources</h3>
+                <p>Upload and manage the library's e-book and PDF collection.</p>
+                <a href="/librarian/resources" class="gradient-btn red ">Manage Resources</a>
+            </div>
+
+            <div class="dashboard-card" style="--card-color:#ff9a9e;">
+                <i class="bi bi-person-check-fill"></i>
+                <h3>Reservation Requests</h3>
+                <p>View and manage all pending book requests.</p>
+                <a href="/librarian/reservations" class="gradient-btn blue">View Requests</a>
+            </div>
+
+            <!-- --- ADD THIS NEW CARD --- -->
+            <div class="dashboard-card" style="--card-color:#f6d365;">
+                <i class="bi bi-tags-fill"></i>
+                <h3>Manage Categories</h3>
+                <p>Organize the library's collection by adding or removing genres.</p>
+                <a href="/librarian/categories" class="gradient-btn  green ">Go to Categories</a>
+            </div>
+
+
+            <div class="dashboard-card" style="--card-color:#fbc2eb;">
+                <i class="bi bi-people-fill"></i>
+                <h3>Manage Users</h3>
+                <p>View, edit roles, and delete user accounts from the system.</p>
+                <a href="/admin/users" class="gradient-btn red">Go to Users</a>
+            </div>
+
+            @* --- THIS IS THE NEW CARD, STYLED TO MATCH --- *@
+            <div class="dashboard-card" style="--card-color:#a6c1ee;">
+                <i class="bi bi-graph-up-arrow"></i>
+                <h3>Library Reports</h3>
+                <p>View detailed analytics on popular books and user activity.</p>
+                <a href="/librarian/reports" class="gradient-btn blue">View Reports</a>
+            </div>
+        </div>
+    </div>
+}
+else
+{
+    <div class="not-authorized">
+        <p>You are not authorized to view this page. You must be a Librarian.</p>
+    </div>
+}
+
+@code {
+    [CascadingParameter]
+    private Task<AuthenticationState> authenticationStateTask { get; set; }
+
+    private bool isAuthorized = false;
+    private string username = "user";
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await authenticationStateTask;
+        var user = authState.User;
+
+        if (user.Identity != null && user.Identity.IsAuthenticated && user.IsInRole("Librarian"))
+        {
+            isAuthorized = true;
+            username = user.Identity.Name ?? "Librarian";
+        }
+    }
+}

@@ -1,0 +1,87 @@
+﻿@page "/"
+@inject NavigationManager NavigationManager
+
+<!-- Hero Section -->
+<div class="hero-section">
+    <div class="hero-text animate-fade-up">
+        <h1>Welcome to the Library Management System</h1>
+        <p>Explore books, borrow instantly, and manage your library account with ease.</p>
+        <div class="hero-buttons">
+            <button class="btn-primary" @onclick="@(() => NavigationManager.NavigateTo("/login"))">
+                Login
+            </button>
+            <button class="btn-secondary" @onclick="@(() => NavigationManager.NavigateTo("/register"))">
+                Register
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Features Section -->
+<div class="features-section">
+    <h2 class="text-center mb-4">Our Services</h2>
+    <div class="features-container">
+        <div class="feature-card animate-fade-in">
+            <i class="bi bi-book display-4 text-primary"></i>
+            <h3>Borrow Books</h3>
+            <p>Browse our collection and borrow your favorite titles.</p>
+        </div>
+        <div class="feature-card animate-fade-in">
+            <i class="bi bi-search display-4 text-success"></i>
+            <h3>Search Library</h3>
+            <p>Find books by title, author, or category.</p>
+        </div>
+        <div class="feature-card animate-fade-in">
+            <i class="bi bi-people display-4 text-warning"></i>
+            <h3>User Management</h3>
+            <p>Manage your account, track borrowed books, and more.</p>
+        </div>
+    </div>
+</div>
+<!-- About Section -->
+<div class="about-section animate-fade-in">
+    <h2>About Our Library</h2>
+    <p>
+        Our Library Management System is designed to make accessing, borrowing, and managing books easier than ever.
+        Whether you're a student, teacher, or librarian, we provide the right tools to keep you connected with knowledge.
+    </p>
+</div>
+
+<!-- Testimonials Section -->
+<div class="testimonials-section">
+    <h2 class="text-center">What Our Users Say</h2>
+    <div class="testimonials-container">
+        <div class="testimonial-card animate-fade-in">
+            <i class="bi bi-chat-quote-fill"></i>
+            <p>"The system makes it so easy to find and borrow books. Highly recommended!"</p>
+            <h5>- Student User</h5>
+        </div>
+        <div class="testimonial-card animate-fade-in">
+            <i class="bi bi-chat-quote-fill"></i>
+            <p>"Managing library resources has never been smoother. A must-have tool."</p>
+            <h5>- Librarian</h5>
+        </div>
+        <div class="testimonial-card animate-fade-in">
+            <i class="bi bi-chat-quote-fill"></i>
+            <p>"The e-resources section is excellent. I can access research papers instantly."</p>
+            <h5>- Teacher</h5>
+        </div>
+    </div>
+</div>
+
+<!-- Contact Section -->
+<div class="contact-section">
+    <h2>Contact Us</h2>
+    <form>
+        <input type="text" placeholder="Your Name" required />
+        <input type="email" placeholder="Your Email" required />
+        <textarea rows="5" placeholder="Your Message" required></textarea>
+        <button type="submit">Send Message</button>
+    </form>
+</div>
+
+<footer class="footer">
+    <div class="footer-bottom">
+        &copy; 2025 Library Management System | All Rights Reserved
+    </div>
+</footer>

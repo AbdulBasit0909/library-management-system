@@ -1,0 +1,26 @@
+﻿<div class="chatbot-widget">
+    <button class="toggle-chat-btn" @onclick="ToggleWindow">
+        @if (isWindowVisible)
+        {
+            <i class="bi bi-x-lg"></i>
+        }
+        else
+        {
+            <i class="bi bi-robot"></i>
+        }
+    </button>
+
+    @if (isWindowVisible)
+    {
+        <ChatbotWindow OnClose="ToggleWindow" />
+    }
+</div>
+
+@code {
+    private bool isWindowVisible = false;
+
+    private void ToggleWindow()
+    {
+        isWindowVisible = !isWindowVisible;
+    }
+}

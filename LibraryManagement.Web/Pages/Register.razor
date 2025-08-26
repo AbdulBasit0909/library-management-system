@@ -1,0 +1,73 @@
+﻿@page "/register"
+@using System.ComponentModel.DataAnnotations
+@using System.Net.Http.Json
+@inject HttpClient Http
+@inject NavigationManager NavigationManager
+
+<div class="auth-page">
+    <div class="auth-card">
+        <h3 class="text-center mb-4">Register a New Account</h3>
+
+        <EditForm Model="@registerModel" OnValidSubmit="HandleRegistration">
+            <DataAnnotationsValidator />
+            <div class="mb-3">
+                <label for="username" class="form-label">Username</label>
+                <InputText id="username" class="form-control" @bind-Value="registerModel.Username" />
+                <ValidationMessage For="@(() => registerModel.Username)" />
+            </div>
+            <div class="mb-3">
+                <label for="email" class="form-label">Email</label>
+                <InputText id="email" type="email" class="form-control" @bind-Value="registerModel.Email" />
+                <ValidationMessage For="@(() => registerModel.Email)" />
+            </div>
+            <div class="mb-3">
+                <label for="password" class="form-label">Password</label>
+                <InputText id="password" type="password" class="form-control" @bind-Value="registerModel.Password" />
+                <ValidationMessage For="@(() => registerModel.Password)" />
+            </div>
+            <div class="mb-3">
+                <label for="role" class="form-label">Role</label>
+                <InputSelect id="role" class="form-select" @bind-Value="registerModel.Role">
+                    <option value="">Select Role...</option>
+                    <option value="Librarian">Librarian</option>
+                    <option value="Teacher">Teacher</option>
+                    <option value="Student">Student</option>
+                </InputSelect>
+                <ValidationMessage For="@(() => registerModel.Role)" />
+            </div>
+            <button type="submit" class="btn btn-primary w-100">Register</button>
+        </EditForm>
+
+        @if (!string.IsNullOrEmpty(errorMessage))
+        {
+            <div class="alert alert-danger mt-3">@errorMessage</div>
+        }
+    </div>
+</div>
+
+@code {
+    private RegisterModel registerModel = new();
+    private string? errorMessage;
+
+    private async Task HandleRegistration()
+    {
+        errorMessage = null;
+        var response = await Http.PostAsJsonAsync("api/Auth/register", registerModel);
+        if (response.IsSuccessStatusCode)
+        {
+            NavigationManager.NavigateTo("/login");
+        }
+        else
+        {
+            errorMessage = "Registration failed. User may already exist.";
+        }
+    }
+
+    public class RegisterModel
+    {
+        [Required] public string Username { get; set; } = "";
+        [Required][EmailAddress] public string Email { get; set; } = "";
+        [Required] public string Password { get; set; } = "";
+        [Required] public string Role { get; set; } = "";
+    }
+}

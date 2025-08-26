@@ -1,0 +1,130 @@
+﻿@page "/librarian/reservations"
+@using LibraryManagement.Web.Models
+@inject HttpClient Http
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject Blazored.Toast.Services.IToastService ToastService
+
+<PageTitle>Manage Reservation Requests</PageTitle>
+
+@if (isAuthorized)
+{
+    <h3><i class="bi bi-person-check-fill"></i> Manage Reservation Requests</h3>
+    <p>Review and process book reservation requests from students and teachers.</p>
+    <hr />
+
+    @if (reservations == null)
+    {
+        <p><em>Loading requests...</em></p>
+    }
+    else if (!reservations.Any())
+    {
+        <div class="alert alert-success">There are currently no pending reservation requests.</div>
+    }
+    else
+    {
+        <table class="table table-hover">
+            <thead class="table-dark">
+                <tr>
+                    <th>Book Title</th>
+                    <th>Requested By</th>
+                    <th>Request Date</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var req in reservations)
+                {
+                    <tr>
+                        <td>@req.BookTitle</td>
+                        <td>@req.UserName</td>
+                        <td>@req.RequestDate.ToShortDateString()</td>
+                        <td>
+                            <button class="btn btn-sm btn-success" @onclick="() => ApproveRequest(req.ReservationId)">
+                                <i class="bi bi-check-lg"></i> Approve
+                            </button>
+                            <button class="btn btn-sm btn-danger" @onclick="() => RejectRequest(req.ReservationId)">
+                                <i class="bi bi-x-lg"></i> Reject
+                            </button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+}
+else
+{
+    <p>You are not authorized to view this page.</p>
+}
+
+@code {
+    [CascadingParameter]
+    private Task<AuthenticationState> authenticationStateTask { get; set; }
+    private bool isAuthorized = false;
+
+    // This list now correctly uses the ReservationDto defined below
+    private List<ReservationDto>? reservations;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await authenticationStateTask;
+        var user = authState.User;
+        if (user.Identity != null && user.Identity.IsAuthenticated && user.IsInRole("Librarian"))
+        {
+            isAuthorized = true;
+            await LoadRequests();
+        }
+    }
+
+    private async Task LoadRequests()
+    {
+        try
+        {
+            reservations = await Http.GetFromJsonAsync<List<ReservationDto>>("api/reservations/pending");
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError("Failed to load reservation requests.");
+            Console.WriteLine(ex.Message);
+        }
+    }
+
+    private async Task ApproveRequest(int reservationId)
+    {
+        var response = await Http.PostAsync($"api/reservations/approve/{reservationId}", null);
+        if (response.IsSuccessStatusCode)
+        {
+            ToastService.ShowSuccess("Reservation approved and book issued!");
+            await LoadRequests(); // Refresh the list
+        }
+        else
+        {
+            ToastService.ShowError("Failed to approve reservation.");
+        }
+    }
+
+    private async Task RejectRequest(int reservationId)
+    {
+        var response = await Http.PostAsync($"api/reservations/reject/{reservationId}", null);
+        if (response.IsSuccessStatusCode)
+        {
+            ToastService.ShowInfo("Reservation has been rejected.");
+            await LoadRequests(); // Refresh the list
+        }
+        else
+        {
+            ToastService.ShowError("Failed to reject reservation.");
+        }
+    }
+
+    // --- THIS IS THE MISSING CLASS ---
+    // This helper DTO must be defined for the page to compile.
+    public class ReservationDto
+    {
+        public int ReservationId { get; set; }
+        public string BookTitle { get; set; }
+        public string UserName { get; set; }
+        public DateTime RequestDate { get; set; }
+    }
+}

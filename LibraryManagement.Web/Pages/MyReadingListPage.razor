@@ -1,0 +1,131 @@
+﻿@page "/my-reading-list"
+@using LibraryManagement.Web.Models
+@using LibraryManagement.Web.Components
+@inject HttpClient Http
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject Blazored.Toast.Services.IToastService ToastService
+
+<PageTitle>My Reading List</PageTitle>
+
+@if (isAuthorized)
+{
+    <h3><i class="bi bi-bookmark-heart-fill"></i> My Reading List</h3>
+    <p>A personal collection of books you want to read.</p>
+    <hr />
+
+    @if (wishlistBooks == null)
+    {
+        <p><em>Loading your reading list...</em></p>
+    }
+    else if (!wishlistBooks.Any())
+    {
+        <div class="alert alert-info">
+            Your reading list is empty. Browse the <a href="/catalog">catalog</a> to find and save books!
+        </div>
+    }
+    else
+    {
+        <!-- We reuse the BookCard component for a consistent look and feel -->
+        <div class="row row-cols-1 row-cols-sm-2 row-cols-md-3 row-cols-lg-4 g-4">
+            @foreach (var book in wishlistBooks)
+            {
+                <div class="col">
+                    <!-- This is a custom wrapper to add the "Remove" button -->
+                    <div class="wishlist-card-wrapper">
+                        <BookCard Book="book" OnShowDetails="ShowBookDetails" />
+                        <button class="btn btn-danger btn-sm remove-wishlist-btn" @onclick="() => RemoveFromWishlist(book.Id)">
+                            <i class="bi bi-x-lg"></i> Remove
+                        </button>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+}
+else
+{
+    <p>You must be logged in to view your reading list.</p>
+}
+
+<!-- We reuse the BookDetailsModal for showing book details -->
+<BookDetailsModal Book="selectedBook"
+                  IsVisible="isModalVisible"
+                  OnClose="CloseBookDetailsModal"
+                  OnRequestBook="RequestBook" />
+
+
+@code {
+    [CascadingParameter]
+    private Task<AuthenticationState> authenticationStateTask { get; set; }
+    private bool isAuthorized = false;
+
+    private List<Book>? wishlistBooks;
+
+    // State for the details modal
+    private Book? selectedBook;
+    private bool isModalVisible = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await authenticationStateTask;
+        var user = authState.User;
+        if (user.Identity != null && user.Identity.IsAuthenticated)
+        {
+            isAuthorized = true;
+            await LoadWishlist();
+        }
+    }
+
+    private async Task LoadWishlist()
+    {
+        try
+        {
+            wishlistBooks = await Http.GetFromJsonAsync<List<Book>>("api/wishlist");
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Failed to load your reading list: {ex.Message}");
+        }
+    }
+
+    private async Task RemoveFromWishlist(int bookId)
+    {
+        var response = await Http.DeleteAsync($"api/wishlist/{bookId}");
+        if (response.IsSuccessStatusCode)
+        {
+            ToastService.ShowSuccess("Book removed from your reading list.");
+            await LoadWishlist(); // Refresh the list
+        }
+        else
+        {
+            ToastService.ShowError("Failed to remove the book from your list.");
+        }
+    }
+
+    // --- Methods to control the details modal ---
+    private void ShowBookDetails(Book book)
+    {
+        selectedBook = book;
+        isModalVisible = true;
+    }
+
+    private void CloseBookDetailsModal()
+    {
+        isModalVisible = false;
+        selectedBook = null;
+    }
+
+    // We still need the RequestBook method for the modal
+    private async Task RequestBook(int bookId)
+    {
+        var response = await Http.PostAsJsonAsync($"api/reservations/{bookId}", new { });
+        if (response.IsSuccessStatusCode)
+        {
+            ToastService.ShowSuccess("Your reservation request has been sent!");
+        }
+        else
+        {
+            ToastService.ShowError("Failed to send reservation request.");
+        }
+    }
+}
