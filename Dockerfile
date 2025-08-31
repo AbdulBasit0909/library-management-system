@@ -1,4 +1,4 @@
- ```dockerfile
+
     # Stage 1: Build the application
     FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
     WORKDIR /source
@@ -27,4 +27,4 @@
 
     # Command to run the application
     ENTRYPOINT ["dotnet", "LibraryManagement.API.dll"]
-    ```
+  
