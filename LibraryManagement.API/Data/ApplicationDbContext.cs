@@ -17,7 +17,8 @@ namespace LibraryManagement.API.Data
         public DbSet<DigitalResource> DigitalResources { get; set; }
         public DbSet<Review> Reviews { get; set; }
         public DbSet<WishlistItem> WishlistItems { get; set; }
-   
+ 
+
         protected override void OnModelCreating(ModelBuilder builder)
         {
             base.OnModelCreating(builder);

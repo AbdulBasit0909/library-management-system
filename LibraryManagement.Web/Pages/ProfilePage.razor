@@ -1,10 +1,7 @@
 ﻿@page "/profile"
 @using LibraryManagement.Web.Models
 @using System.Text.Json
-@using System.ComponentModel.DataAnnotations
-@using Microsoft.AspNetCore.Components.Forms
 @inject HttpClient Http
-@inject NavigationManager NavigationManager
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject Blazored.Toast.Services.IToastService ToastService
 
@@ -13,101 +10,57 @@
 @if (isAuthorized)
 {
     <h3><i class="bi bi-person-circle"></i> My Profile</h3>
-    <p>Manage your account settings and view your library activity.</p>
+    <p>Manage your account settings and change your password.</p>
     <hr />
 
-    @if (userProfile == null)
-    {
-        <p><em>Loading profile information...</em></p>
-    }
-    else
-    {
-        <div class="row">
-            <!-- Left Column: User & Borrowing Info -->
-            <div class="col-lg-5 mb-4">
-                <!-- Basic Info Card (removed picture upload) -->
-                <div class="card shadow-sm mb-4">
-                    <div class="card-body text-center">
-                        <h4 class="card-title">@userProfile.Username</h4>
-                        <p class="text-muted">@userProfile.Role</p>
-                        <p>@userProfile.Email</p>
-                    </div>
-                </div>
-
-                <!-- Borrowing Information Card -->
-                <div class="card shadow-sm">
-                    <div class="card-header"><h4>Borrowing Summary</h4></div>
-                    <div class="card-body">
-                        <ul class="list-group list-group-flush">
-                            <li class="list-group-item"><strong>Books Currently Borrowed:</strong> @userProfile.CurrentLoansCount</li>
-                            <li class="list-group-item">
-                                <strong>Overdue Books:</strong>
-                                <span class="@(userProfile.OverdueLoansCount > 0 ? "text-danger fw-bold" : "")">
-                                    @userProfile.OverdueLoansCount
-                                </span>
-                            </li>
-                        </ul>
-                        <div class="mt-3">
-                            <a href="/my-books" class="btn btn-outline-primary">View My Books in Detail</a>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Right Column: Settings -->
-            <div class="col-lg-7">
-                <div class="card shadow-sm">
-                    <div class="card-header"><h4>Change Password</h4></div>
-                    <div class="card-body">
-                        <EditForm Model="@changePasswordModel" OnValidSubmit="HandlePasswordChange">
-                            <DataAnnotationsValidator />
-                            <div class="mb-3">
-                                <label class="form-label">Current Password</label>
-                                <InputText type="password" class="form-control" @bind-Value="changePasswordModel.CurrentPassword" />
-                                <ValidationMessage For="@(() => changePasswordModel.CurrentPassword)" />
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label">New Password</label>
-                                <InputText type="password" class="form-control" @bind-Value="changePasswordModel.NewPassword" />
-                                <ValidationMessage For="@(() => changePasswordModel.NewPassword)" />
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label">Confirm New Password</label>
-                                <InputText type="password" class="form-control" @bind-Value="changePasswordModel.ConfirmNewPassword" />
-                                <ValidationMessage For="@(() => changePasswordModel.ConfirmNewPassword)" />
-                            </div>
-                            <button type="submit" class="btn btn-primary" disabled="@isLoadingPasswordChange">
-                                @if (isLoadingPasswordChange)
-                                {
-                                    <span class="spinner-border spinner-border-sm"></span>
-                                    <span> Updating...</span>
-                                }
-                                else
-                                {
-                                    <span>Update Password</span>
-                                }
-                            </button>
-                        </EditForm>
-                    </div>
-                </div>
-            </div>
+    <div class="card shadow-sm" style="max-width: 600px;">
+        <div class="card-header">
+            <h4>Change Password</h4>
         </div>
-    }
+        <div class="card-body">
+            <EditForm Model="@changePasswordModel" OnValidSubmit="HandlePasswordChange">
+                <DataAnnotationsValidator />
+                <div class="mb-3">
+                    <label class="form-label">Current Password</label>
+                    <InputText type="password" class="form-control" @bind-Value="changePasswordModel.CurrentPassword" />
+                    <ValidationMessage For="@(() => changePasswordModel.CurrentPassword)" />
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">New Password</label>
+                    <InputText type="password" class="form-control" @bind-Value="changePasswordModel.NewPassword" />
+                    <ValidationMessage For="@(() => changePasswordModel.NewPassword)" />
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Confirm New Password</label>
+                    <InputText type="password" class="form-control" @bind-Value="changePasswordModel.ConfirmNewPassword" />
+                    <ValidationMessage For="@(() => changePasswordModel.ConfirmNewPassword)" />
+                </div>
+                <button type="submit" class="btn btn-primary" disabled="@isLoading">
+                    @if (isLoading)
+                    {
+                        <span class="spinner-border spinner-border-sm"></span>
+                        <span> Updating...</span>
+                    }
+                    else
+                    {
+                        <span>Update Password</span>
+                    }
+                </button>
+            </EditForm>
+        </div>
+    </div>
 }
 else
 {
     <p>You must be logged in to view your profile.</p>
 }
 
-
 @code {
     [CascadingParameter]
     private Task<AuthenticationState> authenticationStateTask { get; set; }
     private bool isAuthorized = false;
-    private bool isLoadingPasswordChange = false;
-
+    private bool isLoading = false;
     private ChangePasswordModel changePasswordModel = new();
-    private ProfileDto? userProfile;
 
     protected override async Task OnInitializedAsync()
     {
@@ -116,22 +69,12 @@ else
         if (user.Identity != null && user.Identity.IsAuthenticated)
         {
             isAuthorized = true;
-            await LoadUserProfile();
         }
-    }
-
-    private async Task LoadUserProfile()
-    {
-        try
-        {
-            userProfile = await Http.GetFromJsonAsync<ProfileDto>("api/auth/profile");
-        }
-        catch { ToastService.ShowError("Could not load your profile data."); }
     }
 
     private async Task HandlePasswordChange()
     {
-        isLoadingPasswordChange = true;
+        isLoading = true;
         var response = await Http.PostAsJsonAsync("api/auth/change-password", changePasswordModel);
         if (response.IsSuccessStatusCode)
         {
@@ -143,14 +86,14 @@ else
             try
             {
                 var errorResponse = await response.Content.ReadFromJsonAsync<ErrorResponse>();
-                ToastService.ShowError(string.Join(", ", errorResponse?.Errors ?? new List<string> { "An unknown error occurred." }));
+                ToastService.ShowError(string.Join("\n", errorResponse?.Errors ?? new List<string> { "An unknown error occurred." }));
             }
             catch
             {
                 ToastService.ShowError("An unknown error occurred while changing the password.");
             }
         }
-        isLoadingPasswordChange = false;
+        isLoading = false;
     }
 
     private class ErrorResponse

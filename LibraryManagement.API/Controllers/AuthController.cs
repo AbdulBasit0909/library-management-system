@@ -91,10 +91,23 @@ namespace LibraryManagement.API.Controllers
         [HttpPost("Register")]
         public async Task<IActionResult> Register([FromBody] RegisterModel model)
         {
+            // Check if the username already exists
             var userExists = await _userManager.FindByNameAsync(model.Username);
             if (userExists != null)
-                return StatusCode(StatusCodes.Status500InternalServerError,
-                    new { Status = "Error", Message = "User already exists!" });
+            {
+                // --- THIS IS THE FIX ---
+                return StatusCode(StatusCodes.Status409Conflict,
+                    new { Status = "Error", Message = "Username already exists!" });
+            }
+
+            // Check if the email already exists
+            var emailExists = await _userManager.FindByEmailAsync(model.Email);
+            if (emailExists != null)
+            {
+                // --- THIS IS THE FIX ---
+                return StatusCode(StatusCodes.Status409Conflict,
+                    new { Status = "Error", Message = "An account with this email already exists!" });
+            }
 
             ApplicationUser user = new()
             {
@@ -102,6 +115,7 @@ namespace LibraryManagement.API.Controllers
                 SecurityStamp = Guid.NewGuid().ToString(),
                 UserName = model.Username
             };
+
             var result = await _userManager.CreateAsync(user, model.Password);
             if (!result.Succeeded)
             {
@@ -109,39 +123,18 @@ namespace LibraryManagement.API.Controllers
                 return StatusCode(StatusCodes.Status500InternalServerError,
                     new { Status = "Error", Message = $"User creation failed: {string.Join(", ", errors)}" });
             }
+
+            // Check if the role sent from the frontend exists
             if (!await _roleManager.RoleExistsAsync(model.Role))
             {
-                return StatusCode(StatusCodes.Status500InternalServerError,
-                    new { Status = "Error", Message = "This role does not exist." });
+                return StatusCode(StatusCodes.Status400BadRequest,
+                    new { Status = "Error", Message = "The specified role does not exist." });
             }
+
+            // Add the user to the role they selected
             await _userManager.AddToRoleAsync(user, model.Role);
+
             return Ok(new { Status = "Success", Message = "User created successfully!" });
-        }
-
-        // --- NEW ENDPOINT 1: FORGOT PASSWORD ---
-        [HttpPost("forgot-password")]
-        [AllowAnonymous]
-        public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordDto model)
-        {
-            var user = await _userManager.FindByEmailAsync(model.Email);
-            if (user == null)
-            {
-                // IMPORTANT: Do not reveal that the user does not exist.
-                // This is a security measure to prevent email enumeration attacks.
-                return Ok(new { Message = "If an account with this email exists, a password reset link has been sent." });
-            }
-
-            var token = await _userManager.GeneratePasswordResetTokenAsync(user);
-            var encodedToken = HttpUtility.UrlEncode(token);
-
-            // IMPORTANT: This URL must point to YOUR BLAZOR APP's reset page
-            var resetLink = $"https://localhost:7019/reset-password?email={model.Email}&token={encodedToken}";
-
-            var emailBody = $"<h1>Password Reset</h1><p>Please reset your password by <a href='{resetLink}'>clicking here</a>.</p>";
-
-            await _emailSender.SendEmailAsync(model.Email, "Reset Your Library Password", emailBody);
-
-            return Ok(new { Message = "If an account with this email exists, a password reset link has been sent." });
         }
 
         // --- NEW ENDPOINT 2: RESET PASSWORD ---
@@ -228,7 +221,6 @@ namespace LibraryManagement.API.Controllers
             {
                 Username = user.UserName,
                 Email = user.Email,
-                ProfilePictureUrl = user.ProfilePictureUrl,
                 Role = userRoles.FirstOrDefault() ?? "N/A",
                 CurrentLoansCount = userLoans.Count,
                 OverdueLoansCount = overdueLoans.Count,

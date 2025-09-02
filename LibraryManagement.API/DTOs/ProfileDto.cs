@@ -8,6 +8,6 @@
         public int CurrentLoansCount { get; set; }
         public int OverdueLoansCount { get; set; }
         public decimal PotentialFines { get; set; }
-        public string ProfilePictureUrl { get; set; }
+      
     }
 }

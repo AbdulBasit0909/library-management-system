@@ -365,7 +365,7 @@ body {
     justify-content: center;
     align-items: center;
     min-height: 100vh;
-    background: url('/images/loginpic.jpg') no-repeat center center;
+    background: url('/images/newregister.jpg') no-repeat center center;
     background-size: cover;
 }
 
@@ -1006,3 +1006,41 @@ main {
     height: 150px;
     object-fit: cover; /* Prevents the image from being stretched */
 }
+
+/* ==========================================================================
+   ENHANCED PROFILE PAGE STYLES
+   ========================================================================== */
+
+.profile-avatar {
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    background-color: #e9ecef;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin: 0 auto 1rem auto;
+}
+
+    .profile-avatar .bi {
+        font-size: 4rem;
+        color: #adb5bd;
+    }
+
+.profile-card-header {
+    background-color: #f8f9fa;
+    font-weight: 500;
+}
+
+.profile-stats .list-group-item {
+    border-left: 0;
+    border-right: 0;
+}
+
+    .profile-stats .list-group-item:first-child {
+        border-top: 0;
+    }
+
+    .profile-stats .list-group-item:last-child {
+        border-bottom: 0;
+    }

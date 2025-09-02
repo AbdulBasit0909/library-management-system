@@ -36,14 +36,27 @@
                 <ValidationMessage For="@(() => registerModel.Role)" />
             </div>
             <button type="submit" class="btn btn-primary w-100">Register</button>
+            <!-- --- THIS IS THE NEWLY ADDED SECTION --- -->
+            <div class="mt-3 text-center">
+                <span>Already have an account? </span>
+                <a href="/login">Login here</a>
+            </div>
+            <!-- --- END OF NEW SECTION --- -->
+    
+
         </EditForm>
 
         @if (!string.IsNullOrEmpty(errorMessage))
         {
             <div class="alert alert-danger mt-3">@errorMessage</div>
         }
-    </div>
+    
+      
 </div>
+
+     </div>
+    
+
 
 @code {
     private RegisterModel registerModel = new();

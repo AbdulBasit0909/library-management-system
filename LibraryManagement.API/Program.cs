@@ -5,6 +5,7 @@ using LibraryManagement.API.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+
 using Microsoft.IdentityModel.Tokens;
 using System.Net.NetworkInformation;
 using System.Text;
@@ -21,8 +22,24 @@ var MyAllowSpecificOrigins = "_myAllowSpecificOrigins";
 // --- Service Registrations ---
 
 // 1. DbContext and Identity
+// --- THIS IS THE CRITICAL FIX ---
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+{
+    // When deployed, Railway provides a DATABASE_URL.
+    var railwayConnectionString = builder.Configuration["DATABASE_URL"];
+    if (!string.IsNullOrEmpty(railwayConnectionString))
+    {
+        // Use the Pomelo MySQL provider on Railway
+        options.UseMySql(railwayConnectionString, ServerVersion.AutoDetect(railwayConnectionString));
+    }
+    else
+    {
+        // Use the SQL Server provider for local development
+        options.UseSqlServer(connectionString);
+    }
+});
 builder.Services.AddIdentity<ApplicationUser, IdentityRole>()
     .AddEntityFrameworkStores<ApplicationDbContext>()
     .AddDefaultTokenProviders();
