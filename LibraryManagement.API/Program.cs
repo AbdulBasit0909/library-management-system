@@ -23,25 +23,31 @@ var MyAllowSpecificOrigins = "_myAllowSpecificOrigins";
 
 // 1. DbContext and Identity
 // --- THIS IS THE CRITICAL FIX ---
-var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+var railwayUrl = Environment.GetEnvironmentVariable("DATABASE_URL");
 
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
 {
-    // Railway provides its connection string in an environment variable called DATABASE_URL.
-    var railwayConnectionString = Environment.GetEnvironmentVariable("DATABASE_URL");
-
-    if (!string.IsNullOrEmpty(railwayConnectionString))
+    if (!string.IsNullOrEmpty(railwayUrl))
     {
-        // If we are on Railway, use the Pomelo MySQL provider.
-        options.UseMySql(railwayConnectionString, ServerVersion.AutoDetect(railwayConnectionString));
+        // Parse Railway connection string
+        var uri = new Uri(railwayUrl);
+        var userInfo = uri.UserInfo.Split(':', 2); // [0]=username, [1]=password
+
+        var connectionString =
+            $"server={uri.Host};port={uri.Port};database={uri.AbsolutePath.TrimStart('/')};user={userInfo[0]};password={userInfo[1]};";
+
+        // Log connection info (without password) to verify
+        Console.WriteLine($"[DB] Using MySQL on Railway: {uri.Host}:{uri.Port}, DB={uri.AbsolutePath.TrimStart('/')}");
+
+        options.UseMySql(connectionString, ServerVersion.AutoDetect(connectionString));
     }
     else
     {
-        // If not, we are running locally, so use the SQL Server provider from appsettings.
+        // Fallback to local SQL Server
         var localConnectionString = builder.Configuration.GetConnectionString("DefaultConnection");
         options.UseSqlServer(localConnectionString);
     }
-}); 
+});
 builder.Services.AddIdentity<ApplicationUser, IdentityRole>()
     .AddEntityFrameworkStores<ApplicationDbContext>()
     .AddDefaultTokenProviders();
