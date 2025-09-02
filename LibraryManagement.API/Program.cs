@@ -27,19 +27,21 @@ var connectionString = builder.Configuration.GetConnectionString("DefaultConnect
 
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
 {
-    // When deployed, Railway provides a DATABASE_URL.
-    var railwayConnectionString = builder.Configuration["DATABASE_URL"];
+    // Railway provides its connection string in an environment variable called DATABASE_URL.
+    var railwayConnectionString = Environment.GetEnvironmentVariable("DATABASE_URL");
+
     if (!string.IsNullOrEmpty(railwayConnectionString))
     {
-        // Use the Pomelo MySQL provider on Railway
+        // If we are on Railway, use the Pomelo MySQL provider.
         options.UseMySql(railwayConnectionString, ServerVersion.AutoDetect(railwayConnectionString));
     }
     else
     {
-        // Use the SQL Server provider for local development
-        options.UseSqlServer(connectionString);
+        // If not, we are running locally, so use the SQL Server provider from appsettings.
+        var localConnectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+        options.UseSqlServer(localConnectionString);
     }
-});
+}); 
 builder.Services.AddIdentity<ApplicationUser, IdentityRole>()
     .AddEntityFrameworkStores<ApplicationDbContext>()
     .AddDefaultTokenProviders();
