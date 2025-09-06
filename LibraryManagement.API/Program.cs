@@ -95,10 +95,12 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy(name: MyAllowSpecificOrigins, policy =>
     {
-        policy.WithOrigins("https://localhost:7019")
+        policy.WithOrigins(
+                  "https://magical-panda-fecbca.netlify.app", // <-- ADD THIS LINE
+                  "https://localhost:7019") // Keep this for local testing
               .AllowAnyHeader()
               .AllowAnyMethod()
-              .AllowCredentials(); // For SignalR with auth
+              .AllowCredentials();
     });
 });
 
