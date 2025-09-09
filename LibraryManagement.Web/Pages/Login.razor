@@ -87,7 +87,11 @@
                 authProvider.MarkUserAsAuthenticated(result.Token);
 
                 var claims = authProvider.ParseClaimsFromJwt(result.Token);
-                var role = claims.FirstOrDefault(c => c.Type == ClaimTypes.Role)?.Value;
+                var role = claims.FirstOrDefault(c =>
+     c.Type == ClaimTypes.Role ||
+     c.Type == "role" ||
+     c.Type.EndsWith("/role"))?.Value;
+
             
                 switch (role)
                 {

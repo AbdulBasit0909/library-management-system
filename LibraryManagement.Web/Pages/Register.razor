@@ -65,15 +65,28 @@
     private async Task HandleRegistration()
     {
         errorMessage = null;
+
         var response = await Http.PostAsJsonAsync("api/Auth/register", registerModel);
+
         if (response.IsSuccessStatusCode)
         {
             NavigationManager.NavigateTo("/login");
         }
         else
         {
-            errorMessage = "Registration failed. User may already exist.";
+            // Try to read backend error details
+            var errorContent = await response.Content.ReadFromJsonAsync<Dictionary<string, string>>();
+
+            if (errorContent != null && errorContent.ContainsKey("Message"))
+            {
+                errorMessage = errorContent["Message"];
+            }
+            else
+            {
+                errorMessage = $"Registration failed: {response.StatusCode}";
+            }
         }
+    
     }
 
     public class RegisterModel

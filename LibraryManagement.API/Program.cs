@@ -102,6 +102,7 @@ builder.Services.AddCors(options =>
               .AllowAnyMethod()
               .AllowCredentials();
     });
+
 });
 
 // 4. Custom Application Services
