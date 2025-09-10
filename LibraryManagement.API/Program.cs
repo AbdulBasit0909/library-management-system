@@ -50,9 +50,20 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
     }
 });
 
-builder.Services.AddIdentity<ApplicationUser, IdentityRole>()
-    .AddEntityFrameworkStores<ApplicationDbContext>()
-    .AddDefaultTokenProviders();
+builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
+{
+    // --- Password Settings ---
+    options.Password.RequireDigit = false;
+    options.Password.RequiredLength = 4;
+    options.Password.RequireNonAlphanumeric = false;
+    options.Password.RequireUppercase = false;
+    options.Password.RequireLowercase = false;
+    // --- User Settings ---
+    options.User.AllowedUserNameCharacters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-._@+";
+    options.User.RequireUniqueEmail = true;
+})
+  .AddEntityFrameworkStores<ApplicationDbContext>()
+  .AddDefaultTokenProviders();
 
 builder.Services.AddTransient<IEmailSender, EmailSender>();
 
