@@ -8,12 +8,7 @@ The system is built on a robust, industry-standard technology stack, featuring a
 
 ---
 
-## 🚀 Live Demo
 
-*   **Frontend Application (Live Website):** `[Your Live Netlify URL Here, e.g., https://magical-panda-fecbca.netlify.app]`
-*   **Backend API (Live Documentation):** `[Your Live Railway URL Here]/swagger`
-
----
 
 ## ✨ Key Features
 
